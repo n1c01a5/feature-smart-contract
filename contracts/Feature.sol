@@ -379,7 +379,7 @@ abstract contract Arbitrable is IArbitrable {
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
-    function rule(uint _disputeID, uint _ruling) public override onlyArbitrator {
+    function rule(uint _disputeID, uint _ruling) external override onlyArbitrator {
         emit Ruling(Arbitrator(msg.sender), _disputeID, _ruling);
 
         executeRuling(_disputeID,_ruling);
@@ -483,7 +483,7 @@ abstract contract Arbitrator {
 /** @title Feature
  *  Freelancing service smart contract
  */
-contract Feature is Initializable, NativeMetaTransaction, ChainConstants, ContextMixin {
+contract Feature is Initializable, NativeMetaTransaction, ChainConstants, ContextMixin, IArbitrable {
 
     // **************************** //
     // *    Contract variables    * //
@@ -508,7 +508,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     }
 
     struct Claim {
-        uint transactionID; // FIXME: Relation one-to-one with the transaction.
+        uint transactionID; // Relation one-to-one with the transaction.
         address receiver; // Address of the receiver.
         uint lastInteraction; // Last interaction for the dispute procedure.
         uint senderFee; // Total fees paid by the sender.
@@ -578,9 +578,9 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     }
 
     /** @dev Create a transaction.
-     *  @param _deposit // FIXME: Deposit value.
+     *  @param _deposit // Deposit value.
      *  @param _timeoutPayment Time after which a party can automatically execute the arbitrable transaction.
-     *  @param _timeoutClaim // FIXME: Time after which a party can automatically execute the arbitrable transaction.
+     *  @param _timeoutClaim // Time after which the receiver can execute the transaction.
      *  @param _metaEvidence Link to the meta-evidence.
      *  @return transactionID The index of the transaction.
      */
@@ -599,7 +599,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         }));
 
         // Store the meta-evidence.
-        // emit MetaEvidence(transactions.length - 1, _metaEvidence);
+        emit MetaEvidence(transactions.length - 1, _metaEvidence);
         
         return transactions.length - 1;
     }
@@ -622,7 +622,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     /** @dev Transfer the transaction's amount to the receiver if the timeout has passed.
      *  @param _transactionID The index of the transaction.
      */
-    // function executeTransaction(uint _transactionID) public {
+    function executeTransaction(uint _transactionID) public {
     //     Transaction storage transaction = transactions[_transactionID];
     //     require(block.timestamp - transaction.lastInteraction >= transaction.timeoutPayment, "The timeout has not passed yet.");
     //     require(transaction.status == Status.NoDispute, "The transaction shouldn't be disputed.");
@@ -631,38 +631,38 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     transaction.amount = 0;
 
     //     transaction.status = Status.Resolved;
-    // }
+    }
 
     /** @dev Reimburse sender if receiver fails to pay the fee.
      *  @param _transactionID The index of the transaction.
      */
-    // function timeOutBySender(uint _transactionID) public {
+    function timeOutBySender(uint _transactionID) public {
     //     Transaction storage transaction = transactions[_transactionID];
 
     //     require(transaction.status == Status.WaitingReceiver, "The transaction is not waiting on the receiver.");
     //     require(now - transaction.lastInteraction >= feeTimeout, "Timeout time has not passed yet.");
 
     //     executeRuling(_transactionID, RulingOptions.SenderWins);
-    // }
+    }
 
     /** @dev Pay receiver if sender fails to pay the fee.
      *  @param _transactionID The index of the transaction.
      */
-    // function timeOutByReceiver(uint _transactionID) public {
+    function timeOutByReceiver(uint _transactionID) public {
     //     Transaction storage transaction = transactions[_transactionID];
 
     //     require(transaction.status == Status.WaitingSender, "The transaction is not waiting on the sender.");
     //     require(now - transaction.lastInteraction >= feeTimeout, "Timeout time has not passed yet.");
 
     //     executeRuling(_transactionID, RulingOptions.ReceiverWins);
-    // }
+    }
 
     /** @dev Pay the arbitration fee to raise a dispute. To be called by the sender. UNTRUSTED.
      *  Note that the arbitrator can have createDispute throw, which will make this function throw and therefore lead to a party being timed-out.
      *  This is not a vulnerability as the arbitrator can rule in favor of one party anyway.
      *  @param _transactionID The index of the transaction.
      */
-    // function payArbitrationFeeBySender(uint _transactionID) public payable {
+    function payArbitrationFeeBySender(uint _transactionID) public payable {
     //     Transaction storage transaction = transactions[_transactionID];
     //     uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
@@ -682,13 +682,13 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     } else { // The receiver has also paid the fee. We create the dispute.
     //         raiseDispute(_transactionID, arbitrationCost);
     //     }
-    // }
+    }
 
     /** @dev Pay the arbitration fee to raise a dispute. To be called by the receiver. UNTRUSTED.
      *  Note that this function mirrors payArbitrationFeeBySender.
      *  @param _transactionID The index of the transaction.
      */
-    // function payArbitrationFeeByReceiver(uint _transactionID) public payable {
+    function payArbitrationFeeByReceiver(uint _transactionID) public payable {
     //     Transaction storage transaction = transactions[_transactionID];
     //     uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
@@ -707,13 +707,13 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     } else { // The sender has also paid the fee. We create the dispute.
     //         raiseDispute(_transactionID, arbitrationCost);
     //     }
-    // }
+    }
 
     /** @dev Create a dispute. UNTRUSTED.
      *  @param _transactionID The index of the transaction.
      *  @param _arbitrationCost Amount to pay the arbitrator.
      */
-    // function raiseDispute(uint _transactionID, uint _arbitrationCost) internal {
+    function raiseDispute(uint _transactionID, uint _arbitrationCost) internal {
     //     Transaction storage transaction = transactions[_transactionID];
     //     transaction.status = Status.DisputeCreated;
     //     transaction.disputeId = arbitrator.createDispute.value(_arbitrationCost)(AMOUNT_OF_CHOICES, arbitratorExtraData);
@@ -733,13 +733,13 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //         transaction.receiverFee = _arbitrationCost;
     //         transaction.receiver.send(extraFeeReceiver);
     //     }
-    // }
+    }
 
     /** @dev Submit a reference to evidence. EVENT.
      *  @param _transactionID The index of the transaction.
      *  @param _evidence A link to an evidence using its URI.
      */
-    // function submitEvidence(uint _transactionID, string memory _evidence) public {
+    function submitEvidence(uint _transactionID, string memory _evidence) public {
     //     Transaction storage transaction = transactions[_transactionID];
     //     require(
     //         _msgSender() == transaction.sender || _msgSender() == transaction.receiver,
@@ -751,25 +751,25 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     );
 
     //     emit Evidence(arbitrator, _transactionID, _msgSender(), _evidence);
-    // }
+    }
 
     /** @dev Appeal an appealable ruling.
      *  Transfer the funds to the arbitrator.
      *  Note that no checks are required as the checks are done by the arbitrator.
      *  @param _transactionID The index of the transaction.
      */
-    // function appeal(uint _transactionID) public payable {
+    function appeal(uint _transactionID) public payable {
     //     Transaction storage transaction = transactions[_transactionID];
 
     //     arbitrator.appeal.value(msg.value)(transaction.disputeId, arbitratorExtraData);
-    // }
+    }
 
     /** @dev Give a ruling for a dispute. Must be called by the arbitrator.
      *  The purpose of this function is to ensure that the address calling it has the right to rule on the contract.
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
-    // function rule(uint _disputeID, uint _ruling) public {
+    function rule(uint _disputeID, uint _ruling) override external {
     //     uint transactionID = disputeIDtoTransactionID[_disputeID];
     //     Transaction storage transaction = transactions[transactionID];
     //     require(msg.sender == address(arbitrator), "The caller must be the arbitrator.");
@@ -778,13 +778,13 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     emit Ruling(Arbitrator(msg.sender), _disputeID, _ruling);
 
     //     executeRuling(transactionID, _ruling);
-    // }
+    }
 
     /** @dev Execute a ruling of a dispute. It reimburses the fee to the winning party.
      *  @param _transactionID The index of the transaction.
      *  @param _ruling Ruling given by the arbitrator. 1 : Reimburse the receiver. 2 : Pay the sender.
      */
-    // function executeRuling(uint _transactionID, uint _ruling) internal {
+    function executeRuling(uint _transactionID, uint _ruling) internal {
     //     Transaction storage transaction = transactions[_transactionID];
     //     require(_ruling <= AMOUNT_OF_CHOICES, "Invalid ruling.");
 
@@ -804,7 +804,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     transaction.senderFee = 0;
     //     transaction.receiverFee = 0;
     //     transaction.status = Status.Resolved;
-    // }
+    }
 
     // **************************** //
     // *     Constant getters     * //
@@ -813,30 +813,55 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     /** @dev Getter to know the count of transactions.
      *  @return countTransactions The count of transactions.
      */
-    // function getCountTransactions() public view returns (uint countTransactions) {
-    //     return transactions.length;
-    // }
+    function getCountTransactions() public view returns (uint countTransactions) {
+        return transactions.length;
+    }
 
-    /** @dev Get IDs for transactions where the specified address is the receiver and/or the sender.
+    /** @dev Get IDs for transactions where the specified address is the sender.
      *  This function must be used by the UI and not by other smart contracts.
      *  Note that the complexity is O(t), where t is amount of arbitrable transactions.
      *  @param _address The specified address.
      *  @return transactionIDs The transaction IDs.
      */
-    // function getTransactionIDsByAddress(address _address) public view returns (uint[] memory transactionIDs) {
-    //     uint count = 0;
-    //     for (uint i = 0; i < transactions.length; i++) {
-    //         if (transactions[i].sender == _address || transactions[i].receiver == _address)
-    //             count++;
-    //     }
+    function getTransactionIDsByAddress(address _address) public view returns (uint[] memory transactionIDs) {
+        uint count = 0;
 
-    //     transactionIDs = new uint[](count);
+        for (uint i = 0; i < transactions.length; i++) {
+            if (transactions[i].sender == _address)
+                count++;
+        }
 
-    //     count = 0;
+        transactionIDs = new uint[](count);
 
-    //     for (uint j = 0; j < transactions.length; j++) {
-    //         if (transactions[j].sender == _address || transactions[j].receiver == _address)
-    //             transactionIDs[count++] = j;
-    //     }
-    // }
+        count = 0;
+
+        for (uint j = 0; j < transactions.length; j++) {
+            if (transactions[j].sender == _address)
+                transactionIDs[count++] = j;
+        }
+    }
+
+    /** @dev Get IDs for claims where the specified address is the receiver.
+     *  This function must be used by the UI and not by other smart contracts.
+     *  Note that the complexity is O(t), where t is amount of arbitrable claims.
+     *  @param _address The specified address.
+     *  @return claimIDs The claims IDs.
+     */
+    function getClaimIDsByAddress(address _address) public view returns (uint[] memory claimIDs) {
+        uint count = 0;
+
+        for (uint i = 0; i < claims.length; i++) {
+            if (claims[i].receiver == _address)
+                count++;
+        }
+
+        claimIDs = new uint[](count);
+
+        count = 0;
+
+        for (uint j = 0; j < claims.length; j++) {
+            if (claims[j].receiver == _address)
+                claimIDs[count++] = j;
+        }
+    }
 }
