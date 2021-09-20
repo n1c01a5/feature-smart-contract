@@ -504,15 +504,16 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         uint amount; // Amount of the reward in Wei.
         uint deposit; // Amount of the deposit in Wei.
         uint timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
-        uint timeoutClaim;
+        uint delayClaim;
     }
 
     struct Claim {
         uint transactionID; // Relation one-to-one with the transaction.
         address receiver; // Address of the receiver.
+        uint timeoutClaim;
         uint lastInteraction; // Last interaction for the dispute procedure.
-        uint senderFee; // Total fees paid by the sender.
         uint receiverFee; // Total fees paid by the receiver.
+        uint challengerFee; // Total fees paid by the challenger.
         uint disputeID; // If dispute exists, the ID of the dispute.
         Status status; // Status of the the dispute.
     }
@@ -580,22 +581,22 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     /** @dev Create a transaction.
      *  @param _deposit // Deposit value.
      *  @param _timeoutPayment Time after which a party can automatically execute the arbitrable transaction.
-     *  @param _timeoutClaim // Time after which the receiver can execute the transaction.
+     *  @param _delayClaim // Time after which the receiver can execute the transaction.
      *  @param _metaEvidence Link to the meta-evidence.
      *  @return transactionID The index of the transaction.
      */
     function createTransaction(
         uint _deposit,
         uint _timeoutPayment,
-        uint _timeoutClaim,
+        uint _delayClaim,
         string memory _metaEvidence
     ) public payable returns (uint transactionID) {
         transactions.push(Transaction({
             sender: _msgSender(),
             amount: msg.value, // Put the amount of the transaction to the smart vault.
             deposit: _deposit,
-            timeoutPayment: _timeoutPayment,
-            timeoutClaim: _timeoutClaim
+            timeoutPayment: _timeoutPayment + block.timestamp,
+            delayClaim: _delayClaim
         }));
 
         // Store the meta-evidence.
@@ -604,20 +605,50 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         return transactions.length - 1;
     }
 
+    /** @dev Claiom from receiver
+     *  @param _transactionID The index of the transaction.
+     *  @return claimID The index of the claim.
+     */
+    function claim(
+        uint _transactionID
+    ) public payable returns (uint claimID)  {
+        Transaction storage transaction = transactions[_transactionID];
+
+        uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
+
+        require(msg.value >= transaction.deposit + arbitrationCost, "The deposit should be completed.");
+
+        claims.push(Claim({
+            transactionID: _transactionID,
+            receiver: _msgSender(),
+            timeoutClaim: transaction.delayClaim + block.timestamp,
+            lastInteraction: block.timestamp,
+            receiverFee: arbitrationCost,
+            challengerFee: 0,
+            disputeID: 0,
+            status: Status.NoDispute
+        }));
+
+        return claims.length - 1;
+    }
+
     /** @dev Pay receiver. To be called if the service is provided.
      *  @param _claimID The index of the claim.
      */
     function pay(uint _claimID) public {
-        Claim storage claim = claims[_claimID];
-        Transaction storage transaction = transactions[claim.transactionID];
+        Claim memory claim = claims[_claimID];
+        Transaction memory transaction = transactions[claim.transactionID];
 
-        require(transaction.timeoutClaim >= block.timestamp, "The timeout claim should be passed.");
+        require(claim.timeoutClaim <= block.timestamp, "The timeout claim should be passed.");
         require(claim.status == Status.NoDispute, "The transaction shouldn't be disputed.");
 
-        payable(claim.receiver).transfer(transaction.amount);
+        payable(claim.receiver).transfer(transaction.amount + transaction.deposit + claim.receiverFee);
 
         emit Payment(claim.transactionID, transaction.amount, transaction.sender);
     }
+
+    // reimburse()
+    // FIXME: add require to test if a claim is currently running
 
     /** @dev Transfer the transaction's amount to the receiver if the timeout has passed.
      *  @param _transactionID The index of the transaction.
