@@ -493,7 +493,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     uint8 constant AMOUNT_OF_CHOICES = 2;
 
     // Enum relative to different periods in the case of a negotiation or dispute.
-    enum Status { NoDispute, WaitingFinder, WaitingOwner, DisputeCreated, Resolved }
+    enum Status { WaitingForChallenger, DisputeCreated, Resolved }
     // The different parties of the dispute.
     enum Party { Sender, Receiver }
     // The different ruling for the dispute resolution.
@@ -505,15 +505,18 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         uint deposit; // Amount of the deposit in Wei.
         uint timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
         uint delayClaim;
+        uint[] runningClaimIDs; // IDs of running claims.
+        bool isExecuted;
     }
 
     struct Claim {
         uint transactionID; // Relation one-to-one with the transaction.
         address receiver; // Address of the receiver.
+        address challenger; // Address of the challenger.
         uint timeoutClaim;
         uint lastInteraction; // Last interaction for the dispute procedure.
         uint receiverFee; // Total fees paid by the receiver.
-        uint challengerFee; // Total fees paid by the challenger.
+        uint challengerFee; // Total fees paid by the challenge.
         uint disputeID; // If dispute exists, the ID of the dispute.
         Status status; // Status of the the dispute.
     }
@@ -533,12 +536,19 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     // *          Events          * //
     // **************************** //
     
-    /** @dev To be emitted when a party pays or reimburses the other.
+    /** @dev To be emitted when a party pays.
      *  @param _transactionID The index of the transaction.
      *  @param _amount The amount paid.
      *  @param _party The party that paid.
      */
     event Payment(uint indexed _transactionID, uint _amount, address _party);
+
+    /** @dev To be emitted when a sender is refunded.
+     *  @param _transactionID The index of the transaction.
+     *  @param _amount The amount paid.
+     *  @param _party The party that paid.
+     */
+    event Refund(uint indexed _transactionID, uint _amount, address _party);
     
     /** @dev Indicate that a party has to pay a fee or would otherwise be considered as losing.
      *  @param _transactionID The index of the transaction.
@@ -591,12 +601,16 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         uint _delayClaim,
         string memory _metaEvidence
     ) public payable returns (uint transactionID) {
+        uint[] memory claimIDsEmpty;
+
         transactions.push(Transaction({
             sender: _msgSender(),
             amount: msg.value, // Put the amount of the transaction to the smart vault.
             deposit: _deposit,
             timeoutPayment: _timeoutPayment + block.timestamp,
-            delayClaim: _delayClaim
+            delayClaim: _delayClaim,
+            runningClaimIDs: claimIDsEmpty,
+            isExecuted: false
         }));
 
         // Store the meta-evidence.
@@ -605,7 +619,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         return transactions.length - 1;
     }
 
-    /** @dev Claiom from receiver
+    /** @dev Claim from receiver
      *  @param _transactionID The index of the transaction.
      *  @return claimID The index of the claim.
      */
@@ -621,34 +635,59 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         claims.push(Claim({
             transactionID: _transactionID,
             receiver: _msgSender(),
+            challenger: address(0),
             timeoutClaim: transaction.delayClaim + block.timestamp,
             lastInteraction: block.timestamp,
             receiverFee: arbitrationCost,
             challengerFee: 0,
             disputeID: 0,
-            status: Status.NoDispute
+            status: Status.WaitingForChallenger
         }));
 
-        return claims.length - 1;
+        claimID = claims.length - 1;
+
+        transaction.timeoutPayment += transaction.delayClaim;
+        transaction.runningClaimIDs.push(claimID);
+
+        return claimID;
     }
 
     /** @dev Pay receiver. To be called if the service is provided.
      *  @param _claimID The index of the claim.
      */
     function pay(uint _claimID) public {
-        Claim memory claim = claims[_claimID];
-        Transaction memory transaction = transactions[claim.transactionID];
+        Claim storage claim = claims[_claimID];
+        Transaction storage transaction = transactions[claim.transactionID];
 
+        require(transaction.isExecuted == false, "The transaction should not be executed.");
         require(claim.timeoutClaim <= block.timestamp, "The timeout claim should be passed.");
-        require(claim.status == Status.NoDispute, "The transaction shouldn't be disputed.");
+        require(claim.status == Status.WaitingForChallenger, "The transaction shouldn't be disputed.");
+
+        transaction.isExecuted = true;
+        claim.status = Status.Resolved;
 
         payable(claim.receiver).transfer(transaction.amount + transaction.deposit + claim.receiverFee);
 
         emit Payment(claim.transactionID, transaction.amount, transaction.sender);
     }
 
-    // reimburse()
-    // FIXME: add require to test if a claim is currently running
+    /**
+     * @notice Refund the sender. To be called when the sender wants to refund a transaction.
+     * @param _transactionID The index of the transaction.
+     */
+    function refund(uint _transactionID) public {
+        Transaction storage transaction = transactions[_transactionID];
+
+        require(transaction.isExecuted == false, "The transaction should not be refunded.");
+        require(transaction.runningClaimIDs.length == 0, "The transaction should not to have running claims.");
+        require(transaction.timeoutPayment <= block.timestamp, "The timeout payment should be passed.");
+
+        transaction.isExecuted = true;
+
+        payable(transaction.sender).transfer(transaction.amount);
+
+        emit Refund(_transactionID, transaction.amount, transaction.sender);
+    }
 
     /** @dev Transfer the transaction's amount to the receiver if the timeout has passed.
      *  @param _transactionID The index of the transaction.
@@ -664,106 +703,54 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     transaction.status = Status.Resolved;
     }
 
-    /** @dev Reimburse sender if receiver fails to pay the fee.
-     *  @param _transactionID The index of the transaction.
-     */
-    function timeOutBySender(uint _transactionID) public {
-    //     Transaction storage transaction = transactions[_transactionID];
-
-    //     require(transaction.status == Status.WaitingReceiver, "The transaction is not waiting on the receiver.");
-    //     require(now - transaction.lastInteraction >= feeTimeout, "Timeout time has not passed yet.");
-
-    //     executeRuling(_transactionID, RulingOptions.SenderWins);
-    }
-
-    /** @dev Pay receiver if sender fails to pay the fee.
-     *  @param _transactionID The index of the transaction.
-     */
-    function timeOutByReceiver(uint _transactionID) public {
-    //     Transaction storage transaction = transactions[_transactionID];
-
-    //     require(transaction.status == Status.WaitingSender, "The transaction is not waiting on the sender.");
-    //     require(now - transaction.lastInteraction >= feeTimeout, "Timeout time has not passed yet.");
-
-    //     executeRuling(_transactionID, RulingOptions.ReceiverWins);
-    }
-
     /** @dev Pay the arbitration fee to raise a dispute. To be called by the sender. UNTRUSTED.
      *  Note that the arbitrator can have createDispute throw, which will make this function throw and therefore lead to a party being timed-out.
      *  This is not a vulnerability as the arbitrator can rule in favor of one party anyway.
-     *  @param _transactionID The index of the transaction.
+     *  @param _claimID The index of the claim.
      */
-    function payArbitrationFeeBySender(uint _transactionID) public payable {
-    //     Transaction storage transaction = transactions[_transactionID];
-    //     uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
+    function challengeClaim(uint _claimID) public payable {
+        Claim storage claim = claims[_claimID];
+        Transaction storage transaction = transactions[claim.transactionID];
 
-    //     require(transaction.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
-    //     require(msg.sender == transaction.sender, "The caller must be the sender.");
+        uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
-    //     transaction.senderFee += msg.value;
-    //     // Require that the total pay at least the arbitration cost.
-    //     require(transaction.senderFee >= arbitrationCost, "The sender fee must cover arbitration costs.");
+        require(claim.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
 
-    //     transaction.lastInteraction = now;
+        claim.challengerFee += msg.value;
+        claim.challenger = msgSender();
 
-    //     // The receiver still has to pay. This can also happen if he has paid, but arbitrationCost has increased.
-    //     if (transaction.receiverFee < arbitrationCost) {
-    //         transaction.status = Status.WaitingReceiver;
-    //         emit HasToPayFee(_transactionID, Party.Receiver);
-    //     } else { // The receiver has also paid the fee. We create the dispute.
-    //         raiseDispute(_transactionID, arbitrationCost);
-    //     }
-    }
+        // Require that the total pay at least the arbitration cost.
+        require(claim.challengerFee >= arbitrationCost, "The challenger fee must cover arbitration costs.");
 
-    /** @dev Pay the arbitration fee to raise a dispute. To be called by the receiver. UNTRUSTED.
-     *  Note that this function mirrors payArbitrationFeeBySender.
-     *  @param _transactionID The index of the transaction.
-     */
-    function payArbitrationFeeByReceiver(uint _transactionID) public payable {
-    //     Transaction storage transaction = transactions[_transactionID];
-    //     uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
-
-    //     require(transaction.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
-    //     require(msg.sender == transaction.receiver, "The caller must be the receiver.");
-
-    //     transaction.receiverFee += msg.value;
-    //     // Require that the total paid to be at least the arbitration cost.
-    //     require(transaction.receiverFee >= arbitrationCost, "The receiver fee must cover arbitration costs.");
-
-    //     transaction.lastInteraction = now;
-    //     // The sender still has to pay. This can also happen if he has paid, but arbitrationCost has increased.
-    //     if (transaction.senderFee < arbitrationCost) {
-    //         transaction.status = Status.WaitingSender;
-    //         emit HasToPayFee(_transactionID, Party.Sender);
-    //     } else { // The sender has also paid the fee. We create the dispute.
-    //         raiseDispute(_transactionID, arbitrationCost);
-    //     }
+        raiseDispute(_claimID, arbitrationCost);
     }
 
     /** @dev Create a dispute. UNTRUSTED.
-     *  @param _transactionID The index of the transaction.
+     *  @param _claimID The index of the claim.
      *  @param _arbitrationCost Amount to pay the arbitrator.
      */
-    function raiseDispute(uint _transactionID, uint _arbitrationCost) internal {
-    //     Transaction storage transaction = transactions[_transactionID];
-    //     transaction.status = Status.DisputeCreated;
-    //     transaction.disputeId = arbitrator.createDispute.value(_arbitrationCost)(AMOUNT_OF_CHOICES, arbitratorExtraData);
-    //     disputeIDtoTransactionID[transaction.disputeId] = _transactionID;
-    //     emit Dispute(arbitrator, transaction.disputeId, _transactionID, _transactionID);
+    function raiseDispute(uint _claimID, uint _arbitrationCost) internal {
+        Claim storage claim = claims[_claimID];
+        Transaction storage transaction = transactions[claim.transactionID];
 
-    //     // Refund sender if it overpaid.
-    //     if (transaction.senderFee > _arbitrationCost) {
-    //         uint extraFeeSender = transaction.senderFee - _arbitrationCost;
-    //         transaction.senderFee = _arbitrationCost;
-    //         transaction.sender.send(extraFeeSender);
-    //     }
+        claim.status = Status.DisputeCreated;
+        claim.disputeID = arbitrator.createDispute{value: _arbitrationCost}(AMOUNT_OF_CHOICES, arbitratorExtraData);
+        disputeIDtoTransactionID[claim.disputeID] = _claimID;
+        emit Dispute(arbitrator, claim.disputeID, _claimID, _claimID);
 
-    //     // Refund receiver if it overpaid.
-    //     if (transaction.receiverFee > _arbitrationCost) {
-    //         uint extraFeeReceiver = transaction.receiverFee - _arbitrationCost;
-    //         transaction.receiverFee = _arbitrationCost;
-    //         transaction.receiver.send(extraFeeReceiver);
-    //     }
+        // Refund receiver if it overpaid.
+        if (claim.receiverFee > _arbitrationCost) {
+            uint extraFeeSender = claim.receiverFee - _arbitrationCost;
+            claim.receiverFee = _arbitrationCost;
+            payable(claim.receiver).send(extraFeeSender);
+        }
+
+        // Refund challenger if it overpaid.
+        if (claim.challengerFee > _arbitrationCost) {
+            uint extraFeeChallenger = claim.challengerFee - _arbitrationCost;
+            claim.challengerFee = _arbitrationCost;
+            payable(claim.challenger).send(extraFeeChallenger);
+        }
     }
 
     /** @dev Submit a reference to evidence. EVENT.
@@ -812,10 +799,10 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     }
 
     /** @dev Execute a ruling of a dispute. It reimburses the fee to the winning party.
-     *  @param _transactionID The index of the transaction.
+     *  @param _claimID The index of the transaction.
      *  @param _ruling Ruling given by the arbitrator. 1 : Reimburse the receiver. 2 : Pay the sender.
      */
-    function executeRuling(uint _transactionID, uint _ruling) internal {
+    function executeRuling(uint _claimID, uint _ruling) internal {
     //     Transaction storage transaction = transactions[_transactionID];
     //     require(_ruling <= AMOUNT_OF_CHOICES, "Invalid ruling.");
 
@@ -835,6 +822,10 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     //     transaction.senderFee = 0;
     //     transaction.receiverFee = 0;
     //     transaction.status = Status.Resolved;
+    //     // verifier si il n'y a pas d'autres disputes en cours et si oui isDisputed = false
+    //     remove claim dans
+    //     delete transaction.claimIDs[_claimID];
+    //     // send deposit to the winner of the dispute
     }
 
     // **************************** //
