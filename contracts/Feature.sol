@@ -382,7 +382,7 @@ abstract contract Arbitrable is IArbitrable {
     function rule(uint _disputeID, uint _ruling) external override onlyArbitrator {
         emit Ruling(Arbitrator(msg.sender), _disputeID, _ruling);
 
-        executeRuling(_disputeID,_ruling);
+        executeRuling(_disputeID, _ruling);
     }
 
 
@@ -495,9 +495,9 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     // Enum relative to different periods in the case of a negotiation or dispute.
     enum Status { WaitingForChallenger, DisputeCreated, Resolved }
     // The different parties of the dispute.
-    enum Party { Sender, Receiver }
+    enum Party { Receiver, Challenger }
     // The different ruling for the dispute resolution.
-    enum RulingOptions { NoRuling, SenderWins, ReceiverWins }
+    enum RulingOptions { NoRuling, ReceiverWins, ChallengerWins }
 
     struct Transaction {
         address sender;
@@ -524,7 +524,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     Transaction[] public transactions;
     Claim[] public claims;
     
-    mapping (uint => uint) public disputeIDtoTransactionID; // One-to-one relationship between the dispute and the transaction.
+    mapping (uint => uint) public disputeIDtoClaimID; // One-to-one relationship between the dispute and the claim.
 
     address public governor;
 
@@ -710,17 +710,15 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      */
     function challengeClaim(uint _claimID) public payable {
         Claim storage claim = claims[_claimID];
-        Transaction storage transaction = transactions[claim.transactionID];
 
         uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
         require(claim.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
+        // Require that the total pay at least the arbitration cost.
+        require(msg.value >= arbitrationCost, "The challenger fee must cover arbitration costs.");
 
         claim.challengerFee += msg.value;
         claim.challenger = msgSender();
-
-        // Require that the total pay at least the arbitration cost.
-        require(claim.challengerFee >= arbitrationCost, "The challenger fee must cover arbitration costs.");
 
         raiseDispute(_claimID, arbitrationCost);
     }
@@ -731,17 +729,18 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      */
     function raiseDispute(uint _claimID, uint _arbitrationCost) internal {
         Claim storage claim = claims[_claimID];
-        Transaction storage transaction = transactions[claim.transactionID];
 
         claim.status = Status.DisputeCreated;
         claim.disputeID = arbitrator.createDispute{value: _arbitrationCost}(AMOUNT_OF_CHOICES, arbitratorExtraData);
-        disputeIDtoTransactionID[claim.disputeID] = _claimID;
+        disputeIDtoClaimID[claim.disputeID] = _claimID;
+
         emit Dispute(arbitrator, claim.disputeID, _claimID, _claimID);
 
         // Refund receiver if it overpaid.
         if (claim.receiverFee > _arbitrationCost) {
             uint extraFeeSender = claim.receiverFee - _arbitrationCost;
             claim.receiverFee = _arbitrationCost;
+
             payable(claim.receiver).send(extraFeeSender);
         }
 
@@ -749,37 +748,35 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         if (claim.challengerFee > _arbitrationCost) {
             uint extraFeeChallenger = claim.challengerFee - _arbitrationCost;
             claim.challengerFee = _arbitrationCost;
+
             payable(claim.challenger).send(extraFeeChallenger);
         }
     }
 
     /** @dev Submit a reference to evidence. EVENT.
-     *  @param _transactionID The index of the transaction.
+     *  @param _claimID The index of the claim.
      *  @param _evidence A link to an evidence using its URI.
      */
-    function submitEvidence(uint _transactionID, string memory _evidence) public {
-    //     Transaction storage transaction = transactions[_transactionID];
-    //     require(
-    //         _msgSender() == transaction.sender || _msgSender() == transaction.receiver,
-    //         "The caller must be the sender or the receiver."
-    //     );
-    //     require(
-    //         transaction.status < Status.Resolved,
-    //         "Must not send evidence if the dispute is resolved."
-    //     );
+    function submitEvidence(uint _claimID, string memory _evidence) public {
+        Claim storage claim = claims[_claimID];
 
-    //     emit Evidence(arbitrator, _transactionID, _msgSender(), _evidence);
+        require(
+            claim.status < Status.Resolved,
+            "Must not send evidence if the dispute is resolved."
+        );
+
+        emit Evidence(arbitrator, _claimID, _msgSender(), _evidence);
     }
 
     /** @dev Appeal an appealable ruling.
      *  Transfer the funds to the arbitrator.
      *  Note that no checks are required as the checks are done by the arbitrator.
-     *  @param _transactionID The index of the transaction.
+     *  @param _claimID The index of the claim.
      */
-    function appeal(uint _transactionID) public payable {
-    //     Transaction storage transaction = transactions[_transactionID];
+    function appeal(uint _claimID) public payable {
+        Claim storage claim = claims[_claimID];
 
-    //     arbitrator.appeal.value(msg.value)(transaction.disputeId, arbitratorExtraData);
+        arbitrator.appeal{value: msg.value}(claim.disputeID, arbitratorExtraData);
     }
 
     /** @dev Give a ruling for a dispute. Must be called by the arbitrator.
@@ -788,44 +785,41 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
     function rule(uint _disputeID, uint _ruling) override external {
-    //     uint transactionID = disputeIDtoTransactionID[_disputeID];
-    //     Transaction storage transaction = transactions[transactionID];
-    //     require(msg.sender == address(arbitrator), "The caller must be the arbitrator.");
-    //     require(transaction.status == Status.DisputeCreated, "The dispute has already been resolved.");
+        uint claimID = disputeIDtoClaimID[_disputeID];
+        Claim storage claim = claims[claimID];
 
-    //     emit Ruling(Arbitrator(msg.sender), _disputeID, _ruling);
+        require(msg.sender == address(arbitrator), "The caller must be the arbitrator.");
+        require(claim.status == Status.DisputeCreated, "The dispute has already been resolved.");
 
-    //     executeRuling(transactionID, _ruling);
+        emit Ruling(Arbitrator(msg.sender), _disputeID, _ruling);
+
+        executeRuling(claimID, _ruling);
     }
 
     /** @dev Execute a ruling of a dispute. It reimburses the fee to the winning party.
      *  @param _claimID The index of the transaction.
-     *  @param _ruling Ruling given by the arbitrator. 1 : Reimburse the receiver. 2 : Pay the sender.
+     *  @param _ruling Ruling given by the arbitrator. 1 : Pay the receiver with the deposit of paries. 2 : Give the deposit of parties to the challenger.
      */
     function executeRuling(uint _claimID, uint _ruling) internal {
-    //     Transaction storage transaction = transactions[_transactionID];
-    //     require(_ruling <= AMOUNT_OF_CHOICES, "Invalid ruling.");
+        Claim storage claim = claims[_claimID];
+        Transaction storage transaction = transactions[claim.transactionID];
 
-    //     // Give the arbitration fee back.
-    //     // Note that we use send to prevent a party from blocking the execution.
-    //     if (_ruling == RulingOptions.SenderWins) {
-    //         transaction.sender.send(transaction.senderFee + transaction.amount);
-    //     } else if (_ruling == RulingOptions.ReceiverWins) {
-    //         transaction.receiver.send(transaction.receiverFee + transaction.amount);
-    //     } else {
-    //         uint split_amount = (transaction.senderFee + transaction.amount) / 2;
-    //         transaction.sender.send(split_amount);
-    //         transaction.receiver.send(split_amount);
-    //     }
+        require(_ruling <= AMOUNT_OF_CHOICES, "Must be a valid ruling.");
 
-    //     transaction.amount = 0;
-    //     transaction.senderFee = 0;
-    //     transaction.receiverFee = 0;
-    //     transaction.status = Status.Resolved;
-    //     // verifier si il n'y a pas d'autres disputes en cours et si oui isDisputed = false
-    //     remove claim dans
-    //     delete transaction.claimIDs[_claimID];
-    //     // send deposit to the winner of the dispute
+        // Give the arbitration fee back.
+        // Note: we use send to prevent a party from blocking the execution.
+        if (_ruling == uint(RulingOptions.ReceiverWins)) {
+            payable(claim.receiver).send(claim.receiverFee + transaction.deposit * 2 + transaction.amount);
+
+            claim.status = Status.Resolved;
+        } else if (_ruling == uint(RulingOptions.ChallengerWins)) {
+            payable(claim.challenger).send(claim.challengerFee + transaction.deposit * 2);
+        } else {
+            payable(claim.receiver).send(claim.receiverFee + transaction.deposit);
+            payable(claim.challenger).send(claim.challengerFee + transaction.deposit);
+        }
+
+        delete transaction.runningClaimIDs[_claimID];
     }
 
     // **************************** //

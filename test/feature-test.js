@@ -108,14 +108,14 @@ describe("Feature", function () {
     expect((await provider.getBalance(sender1.address)).toString()).to.equal(newBalanceSenderExpected.toString());
   });
 
-  it("Should give the deposit to the challenge after a successful challenge", async function () {
+  it("Should give the arbitration fee and the total deposit to the challenger after a successful challenge", async function () {
     // challengeClaim
     // si le challenger a raison il récupère le deposit et le sender pourra eventuellement recuperer ses fonds a pres un tiemout payment
 
     // isExecuted = true
   });
 
-  it("Should give the amount of transaction to the claimer after a aborted challenge", async function () {
+  it("Should give the amount of transaction and the total deposit to the claimer after a aborted challenge", async function () {
     // si le challenger c
 
     // isExecuted = false
