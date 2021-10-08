@@ -82,7 +82,7 @@ contract Initializable {
     // yield zero, making it an effective way to detect if a contract is
     // under construction or not.
     address self = address(this);
-    uint cs;
+    uint256 cs;
     assembly { cs := extcodesize(self) }
     return cs == 0;
   }
@@ -136,7 +136,7 @@ contract EIP712Base is Initializable {
     }
 
     function getChainId() public view returns (uint) {
-        uint id;
+        uint256 id;
         assembly {
             id := chainid()
         }
@@ -166,7 +166,7 @@ contract EIP712Base is Initializable {
 contract NativeMetaTransaction is EIP712Base {
     bytes32 private constant META_TRANSACTION_TYPEHASH = keccak256(
         bytes(
-            "MetaTransaction(uint nonce,address from,bytes functionSignature)"
+            "MetaTransaction(uint256 nonce,address from,bytes functionSignature)"
         )
     );
 
@@ -184,7 +184,7 @@ contract NativeMetaTransaction is EIP712Base {
      * He should call the desired function directly in that case.
      */
     struct MetaTransaction {
-        uint nonce;
+        uint256 nonce;
         address from;
         bytes functionSignature;
     }
@@ -208,7 +208,7 @@ contract NativeMetaTransaction is EIP712Base {
         );
 
         // increase nonce for user (to avoid re-use)
-        uint noncesByUser = nonces[userAddress];
+        uint256 noncesByUser = nonces[userAddress];
 
         require(noncesByUser + 1 >= noncesByUser, "Must be not an overflow");
 
@@ -246,7 +246,7 @@ contract NativeMetaTransaction is EIP712Base {
             );
     }
 
-    function getNonce(address user) public view returns (uint nonce) {
+    function getNonce(address user) public view returns (uint256 nonce) {
         nonce = nonces[user];
     }
 
@@ -272,10 +272,10 @@ contract NativeMetaTransaction is EIP712Base {
 contract ChainConstants {
     string constant public ERC712_VERSION = "1";
 
-    uint constant public ROOT_CHAIN_ID = 1;
+    uint256 constant public ROOT_CHAIN_ID = 1;
     bytes constant public ROOT_CHAIN_ID_BYTES = hex"01";
 
-    uint constant public CHILD_CHAIN_ID = 77;
+    uint256 constant public CHILD_CHAIN_ID = 77;
     bytes constant public CHILD_CHAIN_ID_BYTES = hex"4D";
 }
 
@@ -288,7 +288,7 @@ abstract contract ContextMixin {
     {
         if (msg.sender == address(this)) {
             bytes memory array = msg.data;
-            uint index = msg.data.length;
+            uint256 index = msg.data.length;
             assembly {
                 // Load the 32 bytes word from memory with the address on the lower 20 bytes, and mask those.
                 sender := and(
@@ -318,7 +318,7 @@ interface IArbitrable {
      *  @param _metaEvidenceID Unique identifier of meta-evidence.
      *  @param _evidence A link to the meta-evidence JSON.
      */
-    event MetaEvidence(uint indexed _metaEvidenceID, string _evidence);
+    event MetaEvidence(uint256 indexed _metaEvidenceID, string _evidence);
 
     /** @dev To be emmited when a dispute is created to link the correct meta-evidence to the disputeID
      *  @param _arbitrator The arbitrator of the contract.
@@ -326,7 +326,7 @@ interface IArbitrable {
      *  @param _metaEvidenceID Unique identifier of meta-evidence.
      *  @param _evidenceGroupID Unique identifier of the evidence group that is linked to this dispute.
      */
-    event Dispute(Arbitrator indexed _arbitrator, uint indexed _disputeID, uint _metaEvidenceID, uint _evidenceGroupID);
+    event Dispute(Arbitrator indexed _arbitrator, uint256 indexed _disputeID, uint256 _metaEvidenceID, uint256 _evidenceGroupID);
 
     /** @dev To be raised when evidence are submitted. Should point to the ressource (evidences are not to be stored on chain due to gas considerations).
      *  @param _arbitrator The arbitrator of the contract.
@@ -334,21 +334,21 @@ interface IArbitrable {
      *  @param _party The address of the party submiting the evidence. Note that 0x0 refers to evidence not submitted by any party.
      *  @param _evidence A URI to the evidence JSON file whose name should be its keccak256 hash followed by .json.
      */
-    event Evidence(Arbitrator indexed _arbitrator, uint indexed _evidenceGroupID, address indexed _party, string _evidence);
+    event Evidence(Arbitrator indexed _arbitrator, uint256 indexed _evidenceGroupID, address indexed _party, string _evidence);
 
     /** @dev To be raised when a ruling is given.
      *  @param _arbitrator The arbitrator giving the ruling.
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling The ruling which was given.
      */
-    event Ruling(Arbitrator indexed _arbitrator, uint indexed _disputeID, uint _ruling);
+    event Ruling(Arbitrator indexed _arbitrator, uint256 indexed _disputeID, uint256 _ruling);
 
     /** @dev Give a ruling for a dispute. Must be called by the arbitrator.
      *  The purpose of this function is to ensure that the address calling it has the right to rule on the contract.
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
-    function rule(uint _disputeID, uint _ruling) external;
+    function rule(uint256 _disputeID, uint256 _ruling) external;
 }
 
 /** @title Arbitrable
@@ -379,7 +379,7 @@ abstract contract Arbitrable is IArbitrable {
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
-    function rule(uint _disputeID, uint _ruling) external override onlyArbitrator {
+    function rule(uint256 _disputeID, uint256 _ruling) external override onlyArbitrator {
         emit Ruling(Arbitrator(msg.sender), _disputeID, _ruling);
 
         executeRuling(_disputeID, _ruling);
@@ -390,7 +390,7 @@ abstract contract Arbitrable is IArbitrable {
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
-    function executeRuling(uint _disputeID, uint _ruling) virtual internal;
+    function executeRuling(uint256 _disputeID, uint256 _ruling) virtual internal;
 }
 
 /** @title Arbitrator
@@ -409,7 +409,7 @@ abstract contract Arbitrator {
         _;
     }
 
-    modifier requireAppealFee(uint _disputeID, bytes calldata _extraData) {
+    modifier requireAppealFee(uint256 _disputeID, bytes calldata _extraData) {
         require(msg.value >= appealCost(_disputeID, _extraData), "Not enough ETH to cover appeal costs.");
         _;
     }
@@ -418,18 +418,18 @@ abstract contract Arbitrator {
      *  @param _disputeID ID of the dispute.
      *  @param _arbitrable The contract which created the dispute.
      */
-    event DisputeCreation(uint indexed _disputeID, Arbitrable indexed _arbitrable);
+    event DisputeCreation(uint256 indexed _disputeID, Arbitrable indexed _arbitrable);
 
     /** @dev To be raised when a dispute can be appealed.
      *  @param _disputeID ID of the dispute.
      */
-    event AppealPossible(uint indexed _disputeID, Arbitrable indexed _arbitrable);
+    event AppealPossible(uint256 indexed _disputeID, Arbitrable indexed _arbitrable);
 
     /** @dev To be raised when the current ruling is appealed.
      *  @param _disputeID ID of the dispute.
      *  @param _arbitrable The contract which created the dispute.
      */
-    event AppealDecision(uint indexed _disputeID, Arbitrable indexed _arbitrable);
+    event AppealDecision(uint256 indexed _disputeID, Arbitrable indexed _arbitrable);
 
     /** @dev Create a dispute. Must be called by the arbitrable contract.
      *  Must be paid at least arbitrationCost(_extraData).
@@ -437,19 +437,19 @@ abstract contract Arbitrator {
      *  @param _extraData Can be used to give additional info on the dispute to be created.
      *  @return disputeID ID of the dispute created.
      */
-    function createDispute(uint _choices, bytes calldata _extraData) public requireArbitrationFee(_extraData) payable returns(uint disputeID) {}
+    function createDispute(uint256 _choices, bytes calldata _extraData) public requireArbitrationFee(_extraData) payable returns(uint256 disputeID) {}
 
     /** @dev Compute the cost of arbitration. It is recommended not to increase it often, as it can be highly time and gas consuming for the arbitrated contracts to cope with fee augmentation.
      *  @param _extraData Can be used to give additional info on the dispute to be created.
      *  @return fee Amount to be paid.
      */
-    function arbitrationCost(bytes calldata _extraData) public view virtual returns(uint fee);
+    function arbitrationCost(bytes calldata _extraData) public view virtual returns(uint256 fee);
 
     /** @dev Appeal a ruling. Note that it has to be called before the arbitrator contract calls rule.
      *  @param _disputeID ID of the dispute to be appealed.
      *  @param _extraData Can be used to give extra info on the appeal.
      */
-    function appeal(uint _disputeID, bytes calldata _extraData) public requireAppealFee(_disputeID,_extraData) payable {
+    function appeal(uint256 _disputeID, bytes calldata _extraData) public requireAppealFee(_disputeID,_extraData) payable {
         emit AppealDecision(_disputeID, Arbitrable(msg.sender));
     }
 
@@ -458,26 +458,26 @@ abstract contract Arbitrator {
      *  @param _extraData Can be used to give additional info on the dispute to be created.
      *  @return fee Amount to be paid.
      */
-    function appealCost(uint _disputeID, bytes calldata _extraData) public view virtual returns(uint fee);
+    function appealCost(uint256 _disputeID, bytes calldata _extraData) public view virtual returns(uint256 fee);
 
     /** @dev Compute the start and end of the dispute's current or next appeal period, if possible.
      *  @param _disputeID ID of the dispute.
      *  @return start The start of the period.
      *  @return end The end of the period.
      */
-    function appealPeriod(uint _disputeID) public view virtual returns(uint start, uint end) {}
+    function appealPeriod(uint256 _disputeID) public view virtual returns(uint256 start, uint256 end) {}
 
     /** @dev Return the status of a dispute.
      *  @param _disputeID ID of the dispute to rule.
      *  @return status The status of the dispute.
      */
-    function disputeStatus(uint _disputeID) public view virtual returns(DisputeStatus status);
+    function disputeStatus(uint256 _disputeID) public view virtual returns(DisputeStatus status);
 
     /** @dev Return the current ruling of a dispute. This is useful for parties to know if they should appeal.
      *  @param _disputeID ID of the dispute.
      *  @return ruling The ruling which has been given or the one which will be given if there is no appeal.
      */
-    function currentRuling(uint _disputeID) public view virtual returns(uint ruling);
+    function currentRuling(uint256 _disputeID) public view virtual returns(uint256 ruling);
 }
 
 /** @title Feature
@@ -501,36 +501,36 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
     struct Transaction {
         address sender;
-        uint amount; // Amount of the reward in Wei.
-        uint deposit; // Amount of the deposit in Wei.
-        uint timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
-        uint delayClaim;
-        uint[] runningClaimIDs; // IDs of running claims.
+        uint256 amount; // Amount of the reward in Wei.
+        uint256 deposit; // Amount of the deposit in Wei.
+        uint256 timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
+        uint256 delayClaim;
+        uint256[] runningClaimIDs; // IDs of running claims.
         bool isExecuted;
     }
 
     struct Claim {
-        uint transactionID; // Relation one-to-one with the transaction.
+        uint256 transactionID; // Relation one-to-one with the transaction.
         address receiver; // Address of the receiver.
         address challenger; // Address of the challenger.
-        uint timeoutClaim;
-        uint lastInteraction; // Last interaction for the dispute procedure.
-        uint receiverFee; // Total fees paid by the receiver.
-        uint challengerFee; // Total fees paid by the challenge.
-        uint disputeID; // If dispute exists, the ID of the dispute.
+        uint256 timeoutClaim;
+        uint256 lastInteraction; // Last interaction for the dispute procedure.
+        uint256 receiverFee; // Total fees paid by the receiver.
+        uint256 challengerFee; // Total fees paid by the challenge.
+        uint256 disputeID; // If dispute exists, the ID of the dispute.
         Status status; // Status of the the dispute.
     }
     
     Transaction[] public transactions;
     Claim[] public claims;
     
-    mapping (uint => uint) public disputeIDtoClaimID; // One-to-one relationship between the dispute and the claim.
+    mapping (uint256 => uint) public disputeIDtoClaimID; // One-to-one relationship between the dispute and the claim.
 
     address public governor;
 
     bytes public arbitratorExtraData; // Extra data to set up the arbitration.
     Arbitrator public arbitrator; // Address of the arbitrator contract.
-    uint public feeTimeout; // Time in seconds a party can take to pay arbitration fees before being considered unresponding and lose the dispute.
+    uint256 public feeTimeout; // Time in seconds a party can take to pay arbitration fees before being considered unresponding and lose the dispute.
 
     // **************************** //
     // *          Events          * //
@@ -541,20 +541,20 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _amount The amount paid.
      *  @param _party The party that paid.
      */
-    event Payment(uint indexed _transactionID, uint _amount, address _party);
+    event Payment(uint256 indexed _transactionID, uint256 _amount, address _party);
 
     /** @dev To be emitted when a sender is refunded.
      *  @param _transactionID The index of the transaction.
      *  @param _amount The amount paid.
      *  @param _party The party that paid.
      */
-    event Refund(uint indexed _transactionID, uint _amount, address _party);
+    event Refund(uint256 indexed _transactionID, uint256 _amount, address _party);
     
     /** @dev Indicate that a party has to pay a fee or would otherwise be considered as losing.
      *  @param _transactionID The index of the transaction.
      *  @param _party The party who has to pay.
      */
-    event HasToPayFee(uint indexed _transactionID, Party _party);
+    event HasToPayFee(uint256 indexed _transactionID, Party _party);
 
     // **************************** //
     // *    Contract functions    * //
@@ -569,7 +569,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     function initialize (
         Arbitrator _arbitrator,
         bytes memory _arbitratorExtraData,
-        uint _feeTimeout
+        uint256 _feeTimeout
     ) public initializer {
         _initializeEIP712("Feature", ERC712_VERSION);
 
@@ -596,11 +596,11 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @return transactionID The index of the transaction.
      */
     function createTransaction(
-        uint _deposit,
-        uint _timeoutPayment,
-        uint _delayClaim,
+        uint256 _deposit,
+        uint256 _timeoutPayment,
+        uint256 _delayClaim,
         string memory _metaEvidence
-    ) public payable returns (uint transactionID) {
+    ) public payable returns (uint256 transactionID) {
         uint[] memory claimIDsEmpty;
 
         transactions.push(Transaction({
@@ -624,11 +624,11 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @return claimID The index of the claim.
      */
     function claim(
-        uint _transactionID
-    ) public payable returns (uint claimID)  {
+        uint256 _transactionID
+    ) public payable returns (uint256 claimID)  {
         Transaction storage transaction = transactions[_transactionID];
 
-        uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
+        uint256 arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
         require(msg.value >= transaction.deposit + arbitrationCost, "The deposit should be completed.");
 
@@ -646,7 +646,6 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         claimID = claims.length - 1;
 
-        transaction.timeoutPayment += transaction.delayClaim;
         transaction.runningClaimIDs.push(claimID);
 
         return claimID;
@@ -655,7 +654,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     /** @dev Pay receiver. To be called if the service is provided.
      *  @param _claimID The index of the claim.
      */
-    function pay(uint _claimID) public {
+    function pay(uint256 _claimID) public {
         Claim storage claim = claims[_claimID];
         Transaction storage transaction = transactions[claim.transactionID];
 
@@ -675,12 +674,12 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      * @notice Refund the sender. To be called when the sender wants to refund a transaction.
      * @param _transactionID The index of the transaction.
      */
-    function refund(uint _transactionID) public {
+    function refund(uint256 _transactionID) public {
         Transaction storage transaction = transactions[_transactionID];
 
         require(transaction.isExecuted == false, "The transaction should not be refunded.");
-        require(transaction.runningClaimIDs.length == 0, "The transaction should not to have running claims.");
         require(transaction.timeoutPayment <= block.timestamp, "The timeout payment should be passed.");
+        require(transaction.runningClaimIDs.length == 0, "The transaction should not to have running claims.");
 
         transaction.isExecuted = true;
 
@@ -689,29 +688,15 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         emit Refund(_transactionID, transaction.amount, transaction.sender);
     }
 
-    /** @dev Transfer the transaction's amount to the receiver if the timeout has passed.
-     *  @param _transactionID The index of the transaction.
-     */
-    function executeTransaction(uint _transactionID) public {
-    //     Transaction storage transaction = transactions[_transactionID];
-    //     require(block.timestamp - transaction.lastInteraction >= transaction.timeoutPayment, "The timeout has not passed yet.");
-    //     require(transaction.status == Status.NoDispute, "The transaction shouldn't be disputed.");
-
-    //     transaction.receiver.transfer(transaction.amount);
-    //     transaction.amount = 0;
-
-    //     transaction.status = Status.Resolved;
-    }
-
     /** @dev Pay the arbitration fee to raise a dispute. To be called by the sender. UNTRUSTED.
      *  Note that the arbitrator can have createDispute throw, which will make this function throw and therefore lead to a party being timed-out.
      *  This is not a vulnerability as the arbitrator can rule in favor of one party anyway.
      *  @param _claimID The index of the claim.
      */
-    function challengeClaim(uint _claimID) public payable {
+    function challengeClaim(uint256 _claimID) public payable {
         Claim storage claim = claims[_claimID];
 
-        uint arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
+        uint256 arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
         require(claim.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
         // Require that the total pay at least the arbitration cost.
@@ -727,7 +712,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _claimID The index of the claim.
      *  @param _arbitrationCost Amount to pay the arbitrator.
      */
-    function raiseDispute(uint _claimID, uint _arbitrationCost) internal {
+    function raiseDispute(uint256 _claimID, uint256 _arbitrationCost) internal {
         Claim storage claim = claims[_claimID];
 
         claim.status = Status.DisputeCreated;
@@ -738,7 +723,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         // Refund receiver if it overpaid.
         if (claim.receiverFee > _arbitrationCost) {
-            uint extraFeeSender = claim.receiverFee - _arbitrationCost;
+            uint256 extraFeeSender = claim.receiverFee - _arbitrationCost;
             claim.receiverFee = _arbitrationCost;
 
             payable(claim.receiver).send(extraFeeSender);
@@ -746,7 +731,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         // Refund challenger if it overpaid.
         if (claim.challengerFee > _arbitrationCost) {
-            uint extraFeeChallenger = claim.challengerFee - _arbitrationCost;
+            uint256 extraFeeChallenger = claim.challengerFee - _arbitrationCost;
             claim.challengerFee = _arbitrationCost;
 
             payable(claim.challenger).send(extraFeeChallenger);
@@ -757,7 +742,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _claimID The index of the claim.
      *  @param _evidence A link to an evidence using its URI.
      */
-    function submitEvidence(uint _claimID, string memory _evidence) public {
+    function submitEvidence(uint256 _claimID, string memory _evidence) public {
         Claim storage claim = claims[_claimID];
 
         require(
@@ -773,7 +758,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  Note that no checks are required as the checks are done by the arbitrator.
      *  @param _claimID The index of the claim.
      */
-    function appeal(uint _claimID) public payable {
+    function appeal(uint256 _claimID) public payable {
         Claim storage claim = claims[_claimID];
 
         arbitrator.appeal{value: msg.value}(claim.disputeID, arbitratorExtraData);
@@ -784,8 +769,8 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _disputeID ID of the dispute in the Arbitrator contract.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 is reserved for "Not able/wanting to make a decision".
      */
-    function rule(uint _disputeID, uint _ruling) override external {
-        uint claimID = disputeIDtoClaimID[_disputeID];
+    function rule(uint256 _disputeID, uint256 _ruling) override external {
+        uint256 claimID = disputeIDtoClaimID[_disputeID];
         Claim storage claim = claims[claimID];
 
         require(msg.sender == address(arbitrator), "The caller must be the arbitrator.");
@@ -800,7 +785,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _claimID The index of the transaction.
      *  @param _ruling Ruling given by the arbitrator. 1 : Pay the receiver with the deposit of paries. 2 : Give the deposit of parties to the challenger.
      */
-    function executeRuling(uint _claimID, uint _ruling) internal {
+    function executeRuling(uint256 _claimID, uint256 _ruling) internal {
         Claim storage claim = claims[_claimID];
         Transaction storage transaction = transactions[claim.transactionID];
 
@@ -826,10 +811,18 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     // *     Constant getters     * //
     // **************************** //
 
+    /** @dev Getter to know the running claim IDs of a transaction.
+     *  @param _transactionID The index of the transaction.
+     *  @return runningClaimIDs The count of transactions.
+     */
+    function getRunningClaimIDsOfTransaction(uint256 _transactionID) public view returns (uint256[] memory runningClaimIDs) {
+        return transactions[_transactionID].runningClaimIDs;
+    }
+
     /** @dev Getter to know the count of transactions.
      *  @return countTransactions The count of transactions.
      */
-    function getCountTransactions() public view returns (uint countTransactions) {
+    function getCountTransactions() public view returns (uint256 countTransactions) {
         return transactions.length;
     }
 
@@ -840,9 +833,9 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @return transactionIDs The transaction IDs.
      */
     function getTransactionIDsByAddress(address _address) public view returns (uint[] memory transactionIDs) {
-        uint count = 0;
+        uint256 count = 0;
 
-        for (uint i = 0; i < transactions.length; i++) {
+        for (uint256 i = 0; i < transactions.length; i++) {
             if (transactions[i].sender == _address)
                 count++;
         }
@@ -851,7 +844,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         count = 0;
 
-        for (uint j = 0; j < transactions.length; j++) {
+        for (uint256 j = 0; j < transactions.length; j++) {
             if (transactions[j].sender == _address)
                 transactionIDs[count++] = j;
         }
@@ -864,9 +857,9 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @return claimIDs The claims IDs.
      */
     function getClaimIDsByAddress(address _address) public view returns (uint[] memory claimIDs) {
-        uint count = 0;
+        uint256 count = 0;
 
-        for (uint i = 0; i < claims.length; i++) {
+        for (uint256 i = 0; i < claims.length; i++) {
             if (claims[i].receiver == _address)
                 count++;
         }
@@ -875,7 +868,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         count = 0;
 
-        for (uint j = 0; j < claims.length; j++) {
+        for (uint256 j = 0; j < claims.length; j++) {
             if (claims[j].receiver == _address)
                 claimIDs[count++] = j;
         }

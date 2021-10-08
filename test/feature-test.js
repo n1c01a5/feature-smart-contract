@@ -2,7 +2,7 @@ const { expect } = require("chai");
 
 const provider = ethers.provider;
 let feature, arbitrator;
-let deployer, sender0, receiver0, sender1, receiver1;
+let deployer, sender0, receiver0, sender1, receiver1, sender2, receiver2, sender3, receiver3;
 let contractAsSignerDeployer,
     contractAsSignerSender0;
 
@@ -12,7 +12,7 @@ beforeEach(async function () {
   const Feature = await ethers.getContractFactory("Feature");
   const CentralizedArbitrator = await ethers.getContractFactory("CentralizedArbitrator");
 
-  [deployer, arbitrator, sender0, receiver0, sender1, receiver1] = await ethers.getSigners();
+  [deployer, arbitrator, sender0, receiver0, sender1, receiver1, sender2, receiver2, sender3, receiver3] = await ethers.getSigners();
 
   feature = await Feature.deploy();
   arbitrator = await CentralizedArbitrator.deploy("20000000000000000"); // 0.02 ether
@@ -25,6 +25,10 @@ beforeEach(async function () {
   contractAsSignerReceiver0 = feature.connect(receiver0);
   contractAsSignerSender1 = feature.connect(sender1);
   contractAsSignerReceiver1 = feature.connect(receiver1);
+  contractAsSignerSender2 = feature.connect(sender2);
+  contractAsSignerReceiver2 = feature.connect(receiver2);
+  contractAsSignerSender3 = feature.connect(sender3);
+  contractAsSignerReceiver3 = feature.connect(receiver3);
 
   const initializeTx = await contractAsSignerDeployer.initialize(
     arbitrator.address, // Arbitrator address
@@ -58,6 +62,13 @@ describe("Feature", function () {
 
     // wait until the transaction is mined
     const transactionMinedClaimTx = await claimTx.wait();
+
+    const getRunningClaimIDsOfTransactionTx = await contractAsSignerReceiver0.getRunningClaimIDsOfTransaction(
+      0
+    );
+
+    expect(getRunningClaimIDsOfTransactionTx.length).to.equal(getRunningClaimIDsOfTransactionTx.length);
+
     const gasFeeClaimTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000)
 
     expect((await feature.claims(0)).transactionID).to.equal(0);
@@ -76,7 +87,7 @@ describe("Feature", function () {
     expect((await provider.getBalance(receiver0.address)).toString()).to.equal(newBalanceReceiverExpected.toString());
   });
 
-  it("Should give back the money to the sender after a valid claim timeout payment", async function () {
+  it("Should refund the money to the sender after a timeout payment without any claim", async function () {
     const createTransactionTx = await contractAsSignerSender1.createTransaction(
       "100000000000000000", // _deposit for claim : 0.1eth => 10% of amount
       "864000", // _timeoutPayment => 10days
@@ -92,10 +103,10 @@ describe("Feature", function () {
 
     // wait until the transaction is mined
     const transactionMinedClaimTx = await createTransactionTx.wait();
-    const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000)
+    const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
 
-    await network.provider.send("evm_increaseTime", [864000])
-    await network.provider.send("evm_mine") // this one will have 100s more
+    await network.provider.send("evm_increaseTime", [864000]);
+    await network.provider.send("evm_mine"); // this one will have 100s more
 
     const withdrawTx = await contractAsSignerDeployer.refund(
       0 // _transactionID
@@ -106,6 +117,74 @@ describe("Feature", function () {
     const newBalanceSenderExpected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeCreateTransactionTx)
 
     expect((await provider.getBalance(sender1.address)).toString()).to.equal(newBalanceSenderExpected.toString());
+  });
+
+  it("Should revert the refund to the sender if the timeout payment is not passed", async function () {
+    const createTransactionTx = await contractAsSignerSender2.createTransaction(
+      "100000000000000000", // _deposit for claim : 0.1eth => 10% of amount
+      "864000", // _timeoutPayment => 10days
+      "259200", // _timeoutClaim => 3days
+      "", // _metaEvidence
+      {
+        value: "1000000000000000000", // 1eth in wei
+        gasPrice: 150000000000
+      }
+    );
+
+    expect((await feature.transactions(0)).sender).to.equal(sender2.address);
+
+    // wait until the transaction is mined
+    const transactionMinedClaimTx = await createTransactionTx.wait();
+    const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
+
+    const claimTx = await contractAsSignerReceiver2.claim(
+      0, // _transactionID
+      {
+        value: "120000000000000000", // 0.12eth
+        gasPrice: 150000000000
+      }
+    );
+
+    await network.provider.send("evm_increaseTime", [42]);
+    await network.provider.send("evm_mine"); // this one will have 100s more
+
+    await expect(
+      contractAsSignerDeployer.refund(0)
+    ).to.be.revertedWith("The timeout payment should be passed.");
+  });
+
+  it("Should revert the refund to the sender if there is any claim", async function () {
+    const createTransactionTx = await contractAsSignerSender3.createTransaction(
+      "100000000000000000", // _deposit for claim : 0.1eth => 10% of amount
+      "864000", // _timeoutPayment => 10days
+      "259200", // _timeoutClaim => 3days
+      "", // _metaEvidence
+      {
+        value: "1000000000000000000", // 1eth in wei
+        gasPrice: 150000000000
+      }
+    );
+
+    expect((await feature.transactions(0)).sender).to.equal(sender3.address);
+
+    // wait until the transaction is mined
+    const transactionMinedClaimTx = await createTransactionTx.wait();
+    const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
+
+    const claimTx = await contractAsSignerReceiver3.claim(
+      0, // _transactionID
+      {
+        value: "120000000000000000", // 0.12eth
+        gasPrice: 150000000000
+      }
+    );
+
+    await network.provider.send("evm_increaseTime", [864000]);
+    await network.provider.send("evm_mine"); // this one will have 100s more
+
+    await expect(
+      contractAsSignerDeployer.refund(0)
+    ).to.be.revertedWith("The transaction should not to have running claims.");
   });
 
   it("Should give the arbitration fee and the total deposit to the challenger after a successful challenge", async function () {
