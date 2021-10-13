@@ -549,6 +549,13 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _party The party that paid.
      */
     event Refund(uint256 indexed _transactionID, uint256 _amount, address _party);
+
+    /** @dev To be emitted when a receiver submit a claim.
+     *  @param _transactionID The index of the transaction.
+     *  @param _claimID The index of the claim.
+     *  @param _receiver The receiver who claims.
+     */
+    event ClaimSubmit(uint256 indexed _transactionID, uint256 _claimID, address _receiver);
     
     /** @dev Indicate that a party has to pay a fee or would otherwise be considered as losing.
      *  @param _transactionID The index of the transaction.
@@ -647,6 +654,8 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         claimID = claims.length - 1;
 
         transaction.runningClaimIDs.push(claimID);
+
+        emit ClaimSubmit(_transactionID, claimID, _msgSender());
 
         return claimID;
     }
