@@ -218,7 +218,7 @@ describe("Feature", function () {
     const challengeClaimTx = await contractAsSignerChallenger0.challengeClaim(
       0, // _claimID
       {
-        value: "120000000000000000", // 0.02eth
+        value: "120000000000000000", // 0.12eth
         gasPrice: 150000000000
       }
     );
