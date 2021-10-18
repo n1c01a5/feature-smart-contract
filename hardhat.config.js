@@ -1,5 +1,10 @@
 require("@nomiclabs/hardhat-waffle");
 require("hardhat-tracer");
+require("@nomiclabs/hardhat-etherscan");
+const path = require('path');
+require("dotenv").config({ path: path.join(__dirname, './.env') });
+
+const {INFURA_PROJECT_ID, PRIVATE_KEY_DEPLOYER, ETHERSCAN_API_KEY} = process.env;
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -19,4 +24,13 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
  */
 module.exports = {
   solidity: "0.8.7",
+  networks: {
+    goerli: {
+      url: `https://goerli.infura.io/v3/${INFURA_PROJECT_ID}`,
+      accounts: [PRIVATE_KEY_DEPLOYER]
+    }
+  },
+  etherscan: {
+    apiKey: ETHERSCAN_API_KEY
+  }
 };
