@@ -660,6 +660,42 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         return claimID;
     }
 
+    /** @dev Claim from receiver
+     *  @param _transactionID The index of the transaction.
+     *  @param _receiver The address of the receiver.
+     *  @return claimID The index of the claim.
+     */
+    function claimWith(
+        uint256 _transactionID,
+        address _receiver
+    ) public payable returns (uint256 claimID)  {
+        Transaction storage transaction = transactions[_transactionID];
+
+        uint256 arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
+
+        require(msg.value >= transaction.deposit + arbitrationCost, "The challenger fee must cover the deposit and the arbitration costs.");
+
+        claims.push(Claim({
+            transactionID: _transactionID,
+            receiver: _receiver,
+            challenger: address(0),
+            timeoutClaim: transaction.delayClaim + block.timestamp,
+            lastInteraction: block.timestamp,
+            receiverFee: arbitrationCost,
+            challengerFee: 0,
+            disputeID: 0,
+            status: Status.WaitingForChallenger
+        }));
+
+        claimID = claims.length - 1;
+
+        transaction.runningClaimIDs.push(claimID);
+
+        emit ClaimSubmit(_transactionID, claimID, _receiver);
+
+        return claimID;
+    }
+
     /** @dev Pay receiver. To be called if the service is provided.
      *  @param _claimID The index of the claim.
      */
@@ -704,12 +740,12 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      */
     function challengeClaim(uint256 _claimID) public payable {
         Claim storage claim = claims[_claimID];
+        Transaction storage transaction = transactions[claim.transactionID];
 
         uint256 arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
 
         require(claim.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
-        // Require that the total pay at least the arbitration cost.
-        require(msg.value >= arbitrationCost, "The challenger fee must cover arbitration costs.");
+        require(msg.value >= transaction.deposit + arbitrationCost, "The challenger fee must cover the deposit and the arbitration costs.");
 
         claim.challengerFee += msg.value;
         claim.challenger = msgSender();
@@ -803,14 +839,18 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         // Give the arbitration fee back.
         // Note: we use send to prevent a party from blocking the execution.
         if (_ruling == uint(RulingOptions.ReceiverWins)) {
-            payable(claim.receiver).send(claim.receiverFee + transaction.deposit * 2 + transaction.amount);
+            payable(claim.receiver).send(transaction.deposit);
 
-            claim.status = Status.Resolved;
+            claim.status = Status.WaitingForChallenger;
         } else if (_ruling == uint(RulingOptions.ChallengerWins)) {
             payable(claim.challenger).send(claim.challengerFee + transaction.deposit * 2);
+
+            claim.status = Status.Resolved;
         } else {
-            payable(claim.receiver).send(claim.receiverFee + transaction.deposit);
+            payable(claim.receiver).send(transaction.deposit);
             payable(claim.challenger).send(claim.challengerFee + transaction.deposit);
+
+            claim.status = Status.WaitingForChallenger;
         }
 
         delete transaction.runningClaimIDs[_claimID];

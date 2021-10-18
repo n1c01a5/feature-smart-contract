@@ -68,12 +68,12 @@ abstract contract Arbitrator {
     enum DisputeStatus {Waiting, Appealable, Solved}
 
     modifier requireArbitrationFee(bytes calldata _extraData) {
-        require(msg.value >= arbitrationCost(_extraData), "Not enough ETH to cover arbitration costs.");
+        require(msg.value >= this.arbitrationCost(_extraData), "Not enough ETH to cover arbitration costs.");
         _;
     }
 
     modifier requireAppealFee(uint _disputeID, bytes calldata _extraData) {
-        require(msg.value >= appealCost(_disputeID, _extraData), "Not enough ETH to cover appeal costs.");
+        require(msg.value >= this.appealCost(_disputeID, _extraData), "Not enough ETH to cover appeal costs.");
         _;
     }
 
@@ -160,14 +160,14 @@ contract CentralizedArbitrator is Arbitrator {
         DisputeStatus status;
     }
 
-    modifier onlyOwner {require(msg.sender==owner, "Can only be called by the owner."); _;}
+    modifier onlyOwner {require(msg.sender == owner, "Can only be called by the owner."); _;}
 
     DisputeStruct[] public disputes;
 
     /** @dev Constructor. Set the initial arbitration price.
      *  @param _arbitrationPrice Amount to be paid for arbitration.
      */
-    constructor(uint _arbitrationPrice) public {
+    constructor(uint _arbitrationPrice) {
         arbitrationPrice = _arbitrationPrice;
     }
 
@@ -191,7 +191,10 @@ contract CentralizedArbitrator is Arbitrator {
      *  @param _extraData Not used by this contract.
      *  @return fee Amount to be paid.
      */
-    function appealCost(uint _disputeID, bytes memory _extraData) override public view returns(uint fee) {
+    function appealCost(
+        uint _disputeID,
+        bytes memory _extraData
+    ) override public pure returns(uint fee) {
         return NOT_PAYABLE_VALUE;
     }
 
@@ -201,8 +204,9 @@ contract CentralizedArbitrator is Arbitrator {
      *  @param _extraData Can be used to give additional info on the dispute to be created.
      *  @return disputeID ID of the dispute created.
      */
-    function createDispute(uint _choices, bytes calldata _extraData) override public payable returns(uint disputeID)  {
+    function createDispute(uint _choices, bytes calldata _extraData) public override payable returns(uint disputeID) {
         super.createDispute(_choices, _extraData);
+
         disputes.push(DisputeStruct({
             arbitrated: IArbitrable(msg.sender),
             choices: _choices,
@@ -230,7 +234,7 @@ contract CentralizedArbitrator is Arbitrator {
 
         payable(msg.sender).send(dispute.fee); // Avoid blocking.
 
-        dispute.arbitrated.rule(_disputeID,_ruling);
+        dispute.arbitrated.rule(_disputeID, _ruling);
     }
 
     /** @dev Give a ruling. UNTRUSTED.
