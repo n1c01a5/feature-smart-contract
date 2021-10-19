@@ -839,7 +839,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         // Give the arbitration fee back.
         // Note: we use send to prevent a party from blocking the execution.
         if (_ruling == uint(RulingOptions.ReceiverWins)) {
-            payable(claim.receiver).send(transaction.deposit);
+            payable(claim.receiver).send(transaction.deposit * 2);
 
             claim.status = Status.WaitingForChallenger;
         } else if (_ruling == uint(RulingOptions.ChallengerWins)) {
