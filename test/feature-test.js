@@ -37,8 +37,7 @@ beforeEach(async function () {
 
   const initializeTx = await contractAsSignerDeployer.initialize(
     arbitrator.address, // Arbitrator address
-    "0x85", // ArbitratorExtraData
-    "604800" // Fee Timeout: 604800s => 1 day
+    "0x85" // ArbitratorExtraData
   );
 });
 

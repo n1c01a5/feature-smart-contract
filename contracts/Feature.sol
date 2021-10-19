@@ -530,7 +530,6 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
     bytes public arbitratorExtraData; // Extra data to set up the arbitration.
     Arbitrator public arbitrator; // Address of the arbitrator contract.
-    uint256 public feeTimeout; // Time in seconds a party can take to pay arbitration fees before being considered unresponding and lose the dispute.
 
     // **************************** //
     // *          Events          * //
@@ -571,18 +570,15 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     /** @dev Constructs the Recover contract.
      *  @param _arbitrator The arbitrator of the contract.
      *  @param _arbitratorExtraData Extra data for the arbitrator.
-     *  @param _feeTimeout Arbitration fee timeout for the parties.
      */
     function initialize (
         Arbitrator _arbitrator,
-        bytes memory _arbitratorExtraData,
-        uint256 _feeTimeout
+        bytes memory _arbitratorExtraData
     ) public initializer {
         _initializeEIP712("Feature", ERC712_VERSION);
 
         arbitrator = Arbitrator(_arbitrator);
         arbitratorExtraData = _arbitratorExtraData;
-        feeTimeout = _feeTimeout;
     }
 
     // This is to support Native meta transactions
