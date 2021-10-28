@@ -319,7 +319,7 @@ describe("Feature ERC20", function () {
     // Claim status switch to Resolved.
     expect(parseInt(claim.status)).to.equal(2);
 
-    const newBalanceChallenger0Expected = new ethers.BigNumber.from("10000200000000000000000").sub(gasFeeChallengeClaimTx);
+    const newBalanceChallenger0Expected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeChallengeClaimTx).add("100000000000000000");
 
     expect((await provider.getBalance(challenger0.address)).toString()).to.equal(newBalanceChallenger0Expected.toString());
   });
