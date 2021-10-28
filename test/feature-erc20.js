@@ -4,6 +4,7 @@ const provider = ethers.provider;
 let erc20Mock, featureERC20, feature, arbitrator;
 let deployer, sender0, receiver0, sender1, receiver1, sender2, receiver2, sender3, receiver3, sender4, receiver4, challenger0, sender5, receiver5, challenger1;
 let contractAsSignerDeployer,
+contractAsSignerJuror,
     contractAsSignerSender0;
 
 beforeEach(async function () {
@@ -209,22 +210,22 @@ describe("Feature ERC20", function () {
     ).to.be.revertedWith("The timeout payment should be passed.");
   });
 
-  it("Should revert the refund to the sender if there is any claim", async function () {
+  it("Should give the amount of the total deposit to the claimer after a aborted challenge", async function () {
     const createTransferTx = await contractAsSignerERC20Deployer.transfer(
-      sender3.address,
+      sender5.address,
       100
     );
 
     await createTransferTx.wait();
 
-    const createAllowERC20Tx = await contractAsSender3ERC20Deployer.approve(
+    const createAllowERC20Tx = await contractAsSender5ERC20Deployer.approve(
       featureERC20.address,
       100
     );
 
     await createAllowERC20Tx.wait();
 
-    const createTransactionTx = await contractAsSignerSender3.createTransaction(
+    const createTransactionTx = await contractAsSignerSender5.createTransaction(
       erc20Mock.address,
       100,
       "100000000000000000", // _deposit for claim : 0.1eth => 10% of amount
@@ -233,13 +234,8 @@ describe("Feature ERC20", function () {
       "" // _metaEvidence
     );
 
-    expect((await featureERC20.transactions(0)).sender).to.equal(sender3.address);
-
-    // wait until the transaction is mined
-    const transactionMinedClaimTx = await createTransactionTx.wait();
-    const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
-
-    const claimTx = await contractAsSignerReceiver3.claim(
+    // Claim
+    const claimTx = await contractAsSignerReceiver5.claim(
       0, // _transactionID
       {
         value: "120000000000000000", // 0.12eth
@@ -247,12 +243,33 @@ describe("Feature ERC20", function () {
       }
     );
 
-    await network.provider.send("evm_increaseTime", [864000]);
-    await network.provider.send("evm_mine"); // this one will have 100s more
+    // wait until the transaction is mined
+    const transactionMinedClaimTx = await claimTx.wait();
 
-    await expect(
-      contractAsSignerDeployer.refund(0)
-    ).to.be.revertedWith("The transaction should not to have running claims.");
+    const gasFeeClaimTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
+
+    // Challenge claim
+    const challengeClaimTx = await contractAsSignerChallenger1.challengeClaim(
+      0, // _claimID
+      {
+        value: "120000000000000000", // 0.12eth
+        gasPrice: 150000000000
+      }
+    );
+
+    await challengeClaimTx.wait();
+
+    // Give ruling
+    const rulingTx = await contractAsSignerJuror.giveRuling(
+      0, // _disputeID
+      1 // Ruling for the receiver
+    );
+
+    await rulingTx.wait();
+
+    const newBalanceReceiver5Expected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeClaimTx).sub("20000000000000000");;
+
+    expect((await provider.getBalance(receiver5.address)).toString()).to.equal(newBalanceReceiver5Expected.toString());
   });
 
   it("Should give the arbitration fee and the total deposit to the challenger after a successful challenge", async function () {
@@ -319,27 +336,31 @@ describe("Feature ERC20", function () {
     // Claim status switch to Resolved.
     expect(parseInt(claim.status)).to.equal(2);
 
-    const newBalanceChallenger0Expected = new ethers.BigNumber.from("10000200000000000000000").sub(gasFeeChallengeClaimTx);
+    const newBalanceChallenger0Expected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeChallengeClaimTx);
 
-    expect((await provider.getBalance(challenger0.address)).toString()).to.equal(newBalanceChallenger0Expected.toString());
+    const balanceChallanger0 = await provider.getBalance(challenger0.address);
+
+    const balanceChallanger0Expected = balanceChallanger0.add("20000000000000000");
+
+    expect(balanceChallanger0Expected.toString()).to.equal(newBalanceChallenger0Expected.toString());
   });
 
-  it("Should give the amount of the total deposit to the claimer after a aborted challenge", async function () {
+  it("Should revert the refund to the sender if there is any claim", async function () {
     const createTransferTx = await contractAsSignerERC20Deployer.transfer(
-      sender5.address,
+      sender3.address,
       100
     );
 
     await createTransferTx.wait();
 
-    const createAllowERC20Tx = await contractAsSender5ERC20Deployer.approve(
+    const createAllowERC20Tx = await contractAsSender3ERC20Deployer.approve(
       featureERC20.address,
       100
     );
 
     await createAllowERC20Tx.wait();
 
-    const createTransactionTx = await contractAsSignerSender5.createTransaction(
+    const createTransactionTx = await contractAsSignerSender3.createTransaction(
       erc20Mock.address,
       100,
       "100000000000000000", // _deposit for claim : 0.1eth => 10% of amount
@@ -348,8 +369,13 @@ describe("Feature ERC20", function () {
       "" // _metaEvidence
     );
 
-    // Claim
-    const claimTx = await contractAsSignerReceiver5.claim(
+    expect((await featureERC20.transactions(0)).sender).to.equal(sender3.address);
+
+    // wait until the transaction is mined
+    const transactionMinedClaimTx = await createTransactionTx.wait();
+    const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
+
+    const claimTx = await contractAsSignerReceiver3.claim(
       0, // _transactionID
       {
         value: "120000000000000000", // 0.12eth
@@ -357,32 +383,11 @@ describe("Feature ERC20", function () {
       }
     );
 
-    // wait until the transaction is mined
-    const transactionMinedClaimTx = await claimTx.wait();
+    await network.provider.send("evm_increaseTime", [864000]);
+    await network.provider.send("evm_mine"); // this one will have 100s more
 
-    const gasFeeClaimTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
-
-    // Challenge claim
-    const challengeClaimTx = await contractAsSignerChallenger1.challengeClaim(
-      0, // _claimID
-      {
-        value: "120000000000000000", // 0.12eth
-        gasPrice: 150000000000
-      }
-    );
-
-    await challengeClaimTx.wait();
-
-    // Give ruling
-    const rulingTx = await contractAsSignerJuror.giveRuling(
-      0, // _disputeID
-      1 // Ruling for the receiver
-    );
-
-    await rulingTx.wait();
-
-    const newBalanceReceiver5Expected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeClaimTx).sub("20000000000000000");;
-
-    expect((await provider.getBalance(receiver5.address)).toString()).to.equal(newBalanceReceiver5Expected.toString());
+    await expect(
+      contractAsSignerDeployer.refund(0)
+    ).to.be.revertedWith("The transaction should not to have running claims.");
   });
 });
