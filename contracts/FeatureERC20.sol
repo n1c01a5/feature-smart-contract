@@ -582,7 +582,7 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
      */
     function createTransaction(
         IERC20 _token,
-        uint _amount,
+        uint256 _amount,
         uint256 _deposit,
         uint256 _timeoutPayment,
         uint256 _delayClaim,
@@ -732,8 +732,8 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
         require(claim.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
         require(msg.value >= transaction.deposit + arbitrationCost, "The challenger fee must cover the deposit and the arbitration costs.");
 
-        claim.challengerFee += msg.value;
-        claim.challenger = msgSender();
+        claim.challengerFee = arbitrationCost;
+        claim.challenger = _msgSender();
 
         raiseDispute(_claimID, arbitrationCost);
     }

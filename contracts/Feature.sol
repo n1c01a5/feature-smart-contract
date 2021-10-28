@@ -743,8 +743,8 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         require(claim.status < Status.DisputeCreated, "Dispute has already been created or because the transaction has been executed.");
         require(msg.value >= transaction.deposit + arbitrationCost, "The challenger fee must cover the deposit and the arbitration costs.");
 
-        claim.challengerFee += msg.value;
-        claim.challenger = msgSender();
+        claim.challengerFee = arbitrationCost;
+        claim.challenger = _msgSender();
 
         raiseDispute(_claimID, arbitrationCost);
     }
