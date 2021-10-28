@@ -3,7 +3,8 @@
 ## Getting Started
 
 `cp .env.example .env`
-`npm run test`
+`npx hardhat test test/feature.js`
+`npx hardhat test test/feature-erc20.js`
 
 ## Deploy
 

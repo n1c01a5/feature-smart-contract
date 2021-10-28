@@ -10,26 +10,7 @@
 
 pragma solidity ^0.8.7;
 
-/*
- * @dev Provides information about the current execution context, including the
- * sender of the transaction and its data. While these are generally available
- * via msg.sender and msg.data, they should not be accessed in such a direct
- * manner, since when dealing with GSN meta-transactions the account sending and
- * paying for execution may not be the actual sender (as far as an application
- * is concerned).
- *
- * This contract is only required for intermediate, library-like contracts.
- */
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
-    }
-
-    function _msgData() internal view virtual returns (bytes memory) {
-        this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
-        return msg.data;
-    }
-}
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Initializable
@@ -44,51 +25,51 @@ abstract contract Context {
  * because this is not dealt with automatically as with constructors.
  */
 contract Initializable {
-    /**
-     * @dev Indicates that the contract has been initialized.
-     */
-    bool private initialized;
 
-    /**
-     * @dev Indicates that the contract is in the process of being initialized.
-     */
-    bool private initializing;
+  /**
+   * @dev Indicates that the contract has been initialized.
+   */
+  bool private initialized;
 
-    /**
-     * @dev Modifier to use in the initializer function of a contract.
-     */
-    modifier initializer() {
-        require(initializing || isConstructor() || !initialized, "Contract instance has already been initialized");
+  /**
+   * @dev Indicates that the contract is in the process of being initialized.
+   */
+  bool private initializing;
 
-        bool isTopLevelCall = !initializing;
-        if (isTopLevelCall) {
-            initializing = true;
-            initialized = true;
-        }
+  /**
+   * @dev Modifier to use in the initializer function of a contract.
+   */
+  modifier initializer() {
+    require(initializing || isConstructor() || !initialized, "Contract instance has already been initialized");
 
-        _;
+    bool isTopLevelCall = !initializing;
+    if (isTopLevelCall) {
+      initializing = true;
+      initialized = true;
+    }
 
-        if (isTopLevelCall) {
-            initializing = false;
-        }
+    _;
+
+    if (isTopLevelCall) {
+      initializing = false;
+    }
   }
 
   /// @dev Returns true if and only if the function is running in the constructor
   function isConstructor() private view returns (bool) {
-        // extcodesize checks the size of the code stored in an address, and
-        // address returns the current address. Since the code is still not
-        // deployed when running a constructor, any checks on its code size will
-        // yield zero, making it an effective way to detect if a contract is
-        // under construction or not.
-        address self = address(this);
-        uint256 cs;
-        assembly { cs := extcodesize(self) }
+    // extcodesize checks the size of the code stored in an address, and
+    // address returns the current address. Since the code is still not
+    // deployed when running a constructor, any checks on its code size will
+    // yield zero, making it an effective way to detect if a contract is
+    // under construction or not.
+    address self = address(this);
+    uint256 cs;
+    assembly { cs := extcodesize(self) }
+    return cs == 0;
+  }
 
-        return cs == 0;
-    }
-
-    // Reserved storage space to allow for layout changes in the future.
-    uint[50] private ______gap;
+  // Reserved storage space to allow for layout changes in the future.
+  uint[50] private ______gap;
 }
 
 contract EIP712Base is Initializable {
@@ -483,7 +464,7 @@ abstract contract Arbitrator {
 /** @title Feature
  *  Freelancing service smart contract
  */
-contract Feature is Initializable, NativeMetaTransaction, ChainConstants, ContextMixin, IArbitrable {
+contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, ContextMixin, IArbitrable {
 
     // **************************** //
     // *    Contract variables    * //
@@ -501,6 +482,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
     struct Transaction {
         address sender;
+        IERC20 token;
         uint256 amount; // Amount of the reward in Wei.
         uint256 deposit; // Amount of the deposit in Wei.
         uint256 timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
@@ -599,16 +581,22 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @return transactionID The index of the transaction.
      */
     function createTransaction(
+        IERC20 _token,
+        uint _amount,
         uint256 _deposit,
         uint256 _timeoutPayment,
         uint256 _delayClaim,
         string memory _metaEvidence
     ) public payable returns (uint256 transactionID) {
+        // Transfers token from sender wallet to contract.
+        require(_token.transferFrom(msgSender(), address(this), _amount), "Sender does not have enough approved funds.");
+
         uint[] memory claimIDsEmpty;
 
         transactions.push(Transaction({
             sender: _msgSender(),
-            amount: msg.value, // Put the amount of the transaction to the smart vault.
+            token: _token,
+            amount: _amount,
             deposit: _deposit,
             timeoutPayment: _timeoutPayment + block.timestamp,
             delayClaim: _delayClaim,
@@ -706,7 +694,8 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         transaction.isExecuted = true;
         claim.status = Status.Resolved;
 
-        payable(claim.receiver).transfer(transaction.amount + transaction.deposit + claim.receiverFee);
+        payable(claim.receiver).transfer(transaction.deposit + claim.receiverFee);
+        IERC20(transaction.token).transfer(claim.receiver, transaction.amount);
 
         emit Payment(claim.transactionID, transaction.amount, transaction.sender);
     }
@@ -724,7 +713,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         transaction.isExecuted = true;
 
-        payable(transaction.sender).transfer(transaction.amount);
+        IERC20(transaction.token).transfer(transaction.sender, transaction.amount);
 
         emit Refund(_transactionID, transaction.amount, transaction.sender);
     }
