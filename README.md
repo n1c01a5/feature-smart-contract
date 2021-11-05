@@ -19,7 +19,7 @@
 ## Etherscan Verification
 
 `npx hardhat clean`
-`npx hardhat verify --network <network> <smart contract address> "Argument1"`
+`npx hardhat verify --network <network> <smart contract address> <Argument1...>`
 
 ## Run Test with event logs
 
