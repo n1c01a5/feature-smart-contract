@@ -629,31 +629,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     function claim(
         uint256 _transactionID
     ) public payable returns (uint256 claimID)  {
-        Transaction storage transaction = transactions[_transactionID];
-
-        uint256 arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
-
-        require(msg.value >= transaction.deposit + arbitrationCost, "The deposit should be completed.");
-
-        claims.push(Claim({
-            transactionID: _transactionID,
-            receiver: _msgSender(),
-            challenger: address(0),
-            timeoutClaim: transaction.delayClaim + block.timestamp,
-            lastInteraction: block.timestamp,
-            receiverFee: arbitrationCost,
-            challengerFee: 0,
-            disputeID: 0,
-            status: Status.WaitingForChallenger
-        }));
-
-        claimID = claims.length - 1;
-
-        transaction.runningClaimIDs.push(claimID);
-
-        emit ClaimSubmit(_transactionID, claimID, _msgSender());
-
-        return claimID;
+        return _claimFor(_transactionID, _msgSender());
     }
 
     /** @dev Claim from receiver
@@ -661,10 +637,22 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
      *  @param _receiver The address of the receiver.
      *  @return claimID The index of the claim.
      */
-    function claimWith(
+    function claimFor(
         uint256 _transactionID,
         address _receiver
     ) public payable returns (uint256 claimID)  {
+        return _claimFor(_transactionID, _receiver);
+    }
+
+    /** @dev Claim from receiver
+     *  @param _transactionID The index of the transaction.
+     *  @param _receiver The address of the receiver.
+     *  @return claimID The index of the claim.
+     */
+    function _claimFor(
+        uint256 _transactionID,
+        address _receiver
+    ) internal returns (uint256 claimID)  {
         Transaction storage transaction = transactions[_transactionID];
 
         uint256 arbitrationCost = arbitrator.arbitrationCost(arbitratorExtraData);
