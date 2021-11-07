@@ -70,11 +70,7 @@ describe("Feature", function () {
     // wait until the transaction is mined
     const transactionMinedClaimTx = await claimTx.wait();
 
-    const getRunningClaimIDsOfTransactionTx = await contractAsSignerReceiver0.getRunningClaimIDsOfTransaction(
-      0
-    );
-
-    expect(getRunningClaimIDsOfTransactionTx.length).to.equal(getRunningClaimIDsOfTransactionTx.length);
+    expect((await feature.transactions(0)).runningClaimCount).to.equal(1);
 
     const gasFeeClaimTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
 
