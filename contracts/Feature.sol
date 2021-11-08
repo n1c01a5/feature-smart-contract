@@ -505,7 +505,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         uint256 deposit; // Amount of the deposit in Wei.
         uint256 timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
         uint256 delayClaim;
-        uint256[] runningClaimIDs; // IDs of running claims.
+        uint256 runningClaimCount; // Count of running claims.
         bool isExecuted;
     }
 
@@ -604,15 +604,13 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
         uint256 _delayClaim,
         string memory _metaEvidence
     ) public payable returns (uint256 transactionID) {
-        uint[] memory claimIDsEmpty;
-
         transactions.push(Transaction({
             sender: _msgSender(),
             amount: msg.value, // Put the amount of the transaction to the smart vault.
             deposit: _deposit,
             timeoutPayment: _timeoutPayment + block.timestamp,
             delayClaim: _delayClaim,
-            runningClaimIDs: claimIDsEmpty,
+            runningClaimCount: 0,
             isExecuted: false
         }));
 
@@ -673,7 +671,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         claimID = claims.length - 1;
 
-        transaction.runningClaimIDs.push(claimID);
+        transaction.runningClaimCount++;
 
         emit ClaimSubmit(_transactionID, claimID, _receiver);
 
@@ -708,7 +706,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         require(transaction.isExecuted == false, "The transaction should not be refunded.");
         require(transaction.timeoutPayment <= block.timestamp, "The timeout payment should be passed.");
-        require(transaction.runningClaimIDs.length == 0, "The transaction should not to have running claims.");
+        require(transaction.runningClaimCount == 0, "The transaction should not to have running claims.");
 
         transaction.isExecuted = true;
 
@@ -837,20 +835,12 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
             claim.status = Status.WaitingForChallenger;
         }
 
-        delete transaction.runningClaimIDs[_claimID];
+        transaction.runningClaimCount--;
     }
 
     // **************************** //
     // *     Constant getters     * //
     // **************************** //
-
-    /** @dev Getter to know the running claim IDs of a transaction.
-     *  @param _transactionID The index of the transaction.
-     *  @return runningClaimIDs The count of transactions.
-     */
-    function getRunningClaimIDsOfTransaction(uint256 _transactionID) public view returns (uint256[] memory runningClaimIDs) {
-        return transactions[_transactionID].runningClaimIDs;
-    }
 
     /** @dev Getter to know the count of transactions.
      *  @return countTransactions The count of transactions.

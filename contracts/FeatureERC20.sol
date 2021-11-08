@@ -487,7 +487,7 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
         uint256 deposit; // Amount of the deposit in Wei.
         uint256 timeoutPayment; // Time in seconds after which the transaction can be executed if not disputed.
         uint256 delayClaim;
-        uint256[] runningClaimIDs; // IDs of running claims.
+        uint256 runningClaimCount; // Count of running claims.
         bool isExecuted;
     }
 
@@ -591,8 +591,6 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
         // Transfers token from sender wallet to contract.
         require(_token.transferFrom(msgSender(), address(this), _amount), "Sender does not have enough approved funds.");
 
-        uint[] memory claimIDsEmpty;
-
         transactions.push(Transaction({
             sender: _msgSender(),
             token: _token,
@@ -600,7 +598,7 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
             deposit: _deposit,
             timeoutPayment: _timeoutPayment + block.timestamp,
             delayClaim: _delayClaim,
-            runningClaimIDs: claimIDsEmpty,
+            runningClaimCount: 0,
             isExecuted: false
         }));
 
@@ -664,7 +662,7 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
 
         claimID = claims.length - 1;
 
-        transaction.runningClaimIDs.push(claimID);
+        transaction.runningClaimCount++;
 
         emit ClaimSubmit(_transactionID, claimID, _receiver);
 
@@ -700,7 +698,7 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
 
         require(transaction.isExecuted == false, "The transaction should not be refunded.");
         require(transaction.timeoutPayment <= block.timestamp, "The timeout payment should be passed.");
-        require(transaction.runningClaimIDs.length == 0, "The transaction should not to have running claims.");
+        require(transaction.runningClaimCount == 0, "The transaction should not to have running claims.");
 
         transaction.isExecuted = true;
 
@@ -829,20 +827,12 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
             claim.status = Status.WaitingForChallenger;
         }
 
-        delete transaction.runningClaimIDs[_claimID];
+        transaction.runningClaimCount--;
     }
 
     // **************************** //
     // *     Constant getters     * //
     // **************************** //
-
-    /** @dev Getter to know the running claim IDs of a transaction.
-     *  @param _transactionID The index of the transaction.
-     *  @return runningClaimIDs The count of transactions.
-     */
-    function getRunningClaimIDsOfTransaction(uint256 _transactionID) public view returns (uint256[] memory runningClaimIDs) {
-        return transactions[_transactionID].runningClaimIDs;
-    }
 
     /** @dev Getter to know the count of transactions.
      *  @return countTransactions The count of transactions.
