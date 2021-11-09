@@ -2,9 +2,11 @@
 
 ## Getting Started
 
-`cp .env.example .env`
-`npx hardhat test test/feature.js`
-`npx hardhat test test/feature-erc20.js`
+```
+cp .env.example .env
+npx hardhat test test/feature.js
+npx hardhat test test/feature-erc20.js
+```
 
 ## Deploy
 
@@ -18,8 +20,10 @@
 
 ## Etherscan Verification
 
-`npx hardhat clean`
-`npx hardhat verify --network <network> <smart contract address> <Argument1...>`
+```
+npx hardhat clean
+npx hardhat verify --network <network> <smart contract address> <Argument1...>
+```
 
 ## Run Test with event logs
 
