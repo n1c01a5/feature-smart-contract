@@ -15,7 +15,7 @@ async function main() {
 
   // We get the contract to deploy
   const CentralizedArbitrator = await hre.ethers.getContractFactory("CentralizedArbitrator");
-  const centralizedArbitrator = await CentralizedArbitrator.deploy("20000000000000000");
+  const centralizedArbitrator = await CentralizedArbitrator.deploy("20000000000000000", "42");
 
   await centralizedArbitrator.deployed();
 

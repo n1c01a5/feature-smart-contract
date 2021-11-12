@@ -16,7 +16,7 @@ npx hardhat test test/feature-erc20.js
 
 ### Centralized Arbitrator
 
-`npx hardhat run scripts/centralized-arbitrator-deploy.js --network <network>`
+`npx hardhat run scripts/centralized-appealable-arbitrator-deploy.js --network <network>`
 
 ## Etherscan Verification
 

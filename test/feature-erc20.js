@@ -10,12 +10,12 @@ beforeEach(async function () {
   // Get the ContractFactory and Signers here.
   const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
   const FeatureERC20 = await ethers.getContractFactory("FeatureERC20");
-  const CentralizedArbitrator = await ethers.getContractFactory("CentralizedArbitrator");
+  const CentralizedArbitrator = await ethers.getContractFactory("CentralizedAppealableArbitrator");
 
   [deployer, sender0, receiver0, sender1, receiver1, sender2, receiver2, sender3, receiver3, sender4, receiver4, challenger0, sender5, receiver5, challenger1] = await ethers.getSigners();
 
   featureERC20 = await FeatureERC20.deploy();
-  arbitrator = await CentralizedArbitrator.deploy("20000000000000000"); // 0.02 ether
+  arbitrator = await CentralizedArbitrator.deploy("20000000000000000", "42"); // 0.02 ether, 42s
   erc20Mock = await ERC20Mock.deploy();
 
   await erc20Mock.deployed();
@@ -61,16 +61,12 @@ describe("Feature ERC20", function () {
       100
     );
 
-    await createTransferTx.wait();
-
     expect(await erc20Mock.balanceOf(sender0.address)).to.equal(100);
 
     const createAllowERC20Tx = await contractAsSender0ERC20Deployer.approve(
       featureERC20.address,
       100
     );
-
-    await createAllowERC20Tx.wait();
 
     const createTransactionTx = await contractAsSignerSender0.createTransaction(
       erc20Mock.address,
@@ -103,13 +99,11 @@ describe("Feature ERC20", function () {
     expect((await featureERC20.claims(0)).transactionID).to.equal(0);
 
     await network.provider.send("evm_increaseTime", [259200]);
-    await network.provider.send("evm_mine"); // this one will have 100s more
+    await network.provider.send("evm_mine");
 
     const payTx = await contractAsSignerDeployer.pay(
       0 // _claimID
     );
-
-    await payTx.wait();
 
     const newBalanceReceiverExpected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeClaimTx);
 
@@ -123,14 +117,10 @@ describe("Feature ERC20", function () {
       100
     );
 
-    await createTransferTx.wait();
-
     const createAllowERC20Tx = await contractAsSender1ERC20Deployer.approve(
       featureERC20.address,
       100
     );
-
-    await createAllowERC20Tx.wait();
 
     const createTransactionTx = await contractAsSignerSender1.createTransaction(
       erc20Mock.address,
@@ -148,13 +138,11 @@ describe("Feature ERC20", function () {
     const gasFeeCreateTransactionTx = transactionMinedClaimTx.gasUsed.valueOf().mul(150000000000);
 
     await network.provider.send("evm_increaseTime", [864000]);
-    await network.provider.send("evm_mine"); // this one will have 100s more
+    await network.provider.send("evm_mine");
 
     const withdrawTx = await contractAsSignerDeployer.refund(
       0 // _transactionID
     );
-
-    await withdrawTx.wait();
 
     expect((await erc20Mock.balanceOf(sender1.address)).toString()).to.equal("100");
   });
@@ -165,14 +153,10 @@ describe("Feature ERC20", function () {
       100
     );
 
-    await createTransferTx.wait();
-
     const createAllowERC20Tx = await contractAsSender2ERC20Deployer.approve(
       featureERC20.address,
       100
     );
-
-    await createAllowERC20Tx.wait();
 
     const createTransactionTx = await contractAsSignerSender2.createTransaction(
       erc20Mock.address,
@@ -198,7 +182,7 @@ describe("Feature ERC20", function () {
     );
 
     await network.provider.send("evm_increaseTime", [42]);
-    await network.provider.send("evm_mine"); // this one will have 100s more
+    await network.provider.send("evm_mine");
 
     await expect(
       contractAsSignerDeployer.refund(0)
@@ -211,14 +195,10 @@ describe("Feature ERC20", function () {
       100
     );
 
-    await createTransferTx.wait();
-
     const createAllowERC20Tx = await contractAsSender3ERC20Deployer.approve(
       featureERC20.address,
       100
     );
-
-    await createAllowERC20Tx.wait();
 
     const createTransactionTx = await contractAsSignerSender3.createTransaction(
       erc20Mock.address,
@@ -244,7 +224,7 @@ describe("Feature ERC20", function () {
     );
 
     await network.provider.send("evm_increaseTime", [864000]);
-    await network.provider.send("evm_mine"); // this one will have 100s more
+    await network.provider.send("evm_mine");
 
     await expect(
       contractAsSignerDeployer.refund(0)
@@ -257,14 +237,10 @@ describe("Feature ERC20", function () {
       100
     );
 
-    await createTransferTx.wait();
-
     const createAllowERC20Tx = await contractAsSender4ERC20Deployer.approve(
       featureERC20.address,
       100
     );
-
-    await createAllowERC20Tx.wait();
 
     const createTransactionTx = await contractAsSignerSender4.createTransaction(
       erc20Mock.address,
@@ -286,8 +262,6 @@ describe("Feature ERC20", function () {
       }
     );
 
-    await claimTx.wait();
-
     // Challenge claim
     const challengeClaimTx = await contractAsSignerChallenger0.challengeClaim(
       0, // _claimID
@@ -303,12 +277,19 @@ describe("Feature ERC20", function () {
     const gasFeeChallengeClaimTx = transactionMinedChallengeClaimTx.gasUsed.valueOf().mul(150000000000);
 
     // Give ruling
-    const giveRulingTx = await contractAsSignerJuror.giveRuling(
+    await contractAsSignerJuror.giveRuling(
       0, // _disputeID
       2 // Ruling for the challenger
     );
 
-    await giveRulingTx.wait();
+    await network.provider.send("evm_increaseTime", [42]);
+    await network.provider.send("evm_mine");
+
+    // Execute ruling
+    await contractAsSignerJuror.giveRuling(
+      0, // _disputeID
+      2 // Ruling for the challenger
+    );
 
     const claim = await featureERC20.claims(0);
 
@@ -367,15 +348,20 @@ describe("Feature ERC20", function () {
       }
     );
 
-    await challengeClaimTx.wait();
-
     // Give ruling
-    const rulingTx = await contractAsSignerJuror.giveRuling(
+    await contractAsSignerJuror.giveRuling(
       0, // _disputeID
       1 // Ruling for the receiver
     );
 
-    await rulingTx.wait();
+    await network.provider.send("evm_increaseTime", [42]);
+    await network.provider.send("evm_mine");
+
+    // Execute ruling
+    await contractAsSignerJuror.giveRuling(
+      0, // _disputeID
+      1 // Ruling for the receiver
+    );
 
     const newBalanceReceiver5Expected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeClaimTx).sub("20000000000000000");;
 
