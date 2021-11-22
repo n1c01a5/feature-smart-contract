@@ -112,7 +112,7 @@ abstract contract Arbitrator {
      *  @param _disputeID ID of the dispute to be appealed.
      *  @param _extraData Can be used to give extra info on the appeal.
      */
-    function appeal(uint _disputeID, bytes calldata _extraData) public requireAppealFee(_disputeID,_extraData) payable {
+    function appeal(uint _disputeID, bytes calldata _extraData) public virtual requireAppealFee(_disputeID,_extraData) payable {
         emit AppealDecision(_disputeID, IArbitrable(msg.sender));
     }
 
@@ -146,17 +146,19 @@ abstract contract Arbitrator {
 /** @title Centralized Arbitrator
  *  @dev This is a centralized arbitrator deciding alone on the result of disputes. No appeals are possible.
  */
-contract CentralizedArbitrator is Arbitrator {
+contract CentralizedAppealableArbitrator is Arbitrator {
 
     address public owner = msg.sender;
-    uint arbitrationPrice; // Not public because arbitrationCost already acts as an accessor.
-    uint constant NOT_PAYABLE_VALUE = (2**256-2)/2; // High value to be sure that the appeal is too expensive.
+    uint256 arbitrationPrice; // Not public because arbitrationCost already acts as an accessor.
+    uint256 public rulingTime;
 
     struct DisputeStruct {
         IArbitrable arbitrated;
-        uint choices;
-        uint fee;
-        uint ruling;
+        uint256 choices;
+        uint256 fee;
+        bool isAppealed;
+        uint256 rulingAppealTimeOut;
+        uint256 ruling;
         DisputeStatus status;
     }
 
@@ -167,14 +169,15 @@ contract CentralizedArbitrator is Arbitrator {
     /** @dev Constructor. Set the initial arbitration price.
      *  @param _arbitrationPrice Amount to be paid for arbitration.
      */
-    constructor(uint _arbitrationPrice) {
+    constructor(uint256 _arbitrationPrice, uint256 _rulingTime) {
         arbitrationPrice = _arbitrationPrice;
+        rulingTime = _rulingTime;
     }
 
     /** @dev Set the arbitration price. Only callable by the owner.
      *  @param _arbitrationPrice Amount to be paid for arbitration.
      */
-    function setArbitrationPrice(uint _arbitrationPrice) public onlyOwner {
+    function setArbitrationPrice(uint256 _arbitrationPrice) public onlyOwner {
         arbitrationPrice = _arbitrationPrice;
     }
 
@@ -192,10 +195,10 @@ contract CentralizedArbitrator is Arbitrator {
      *  @return fee Amount to be paid.
      */
     function appealCost(
-        uint _disputeID,
+        uint256 _disputeID,
         bytes memory _extraData
-    ) override public pure returns(uint fee) {
-        return NOT_PAYABLE_VALUE;
+    ) override public view returns(uint256 fee) {
+        return arbitrationPrice;
     }
 
     /** @dev Create a dispute. Must be called by the arbitrable contract.
@@ -204,13 +207,15 @@ contract CentralizedArbitrator is Arbitrator {
      *  @param _extraData Can be used to give additional info on the dispute to be created.
      *  @return disputeID ID of the dispute created.
      */
-    function createDispute(uint _choices, bytes calldata _extraData) public override payable returns(uint disputeID) {
+    function createDispute(uint256 _choices, bytes calldata _extraData) public override payable returns(uint256 disputeID) {
         super.createDispute(_choices, _extraData);
 
         disputes.push(DisputeStruct({
             arbitrated: IArbitrable(msg.sender),
             choices: _choices,
             fee: msg.value,
+            isAppealed: false,
+            rulingAppealTimeOut: 0,
             ruling: 0,
             status: DisputeStatus.Waiting
         })); // Create the dispute and return its number.
@@ -220,36 +225,51 @@ contract CentralizedArbitrator is Arbitrator {
         return disputes.length - 1;
     }
 
-    /** @dev Give a ruling. UNTRUSTED.
-     *  @param _disputeID ID of the dispute to rule.
-     *  @param _ruling Ruling given by the arbitrator. Note that 0 means "Not able/wanting to make a decision".
+    /** @dev Appeals a ruling.
+     *  @param _disputeID The ID of the dispute.
+     *  @param _extraData Additional info about the appeal.
      */
-    function _giveRuling(uint _disputeID, uint _ruling) internal {
+    function appeal(uint256 _disputeID, bytes calldata _extraData) override public payable requireAppealFee(_disputeID, _extraData) {
+        super.appeal(_disputeID, _extraData);
+
         DisputeStruct storage dispute = disputes[_disputeID];
-        require(_ruling <= dispute.choices, "Invalid ruling.");
-        require(dispute.status != DisputeStatus.Solved, "The dispute must not be solved already.");
 
-        dispute.ruling = _ruling;
-        dispute.status = DisputeStatus.Solved;
 
-        payable(msg.sender).send(dispute.fee); // Avoid blocking.
-
-        dispute.arbitrated.rule(_disputeID, _ruling);
+        dispute.isAppealed = true;
     }
 
     /** @dev Give a ruling. UNTRUSTED.
      *  @param _disputeID ID of the dispute to rule.
      *  @param _ruling Ruling given by the arbitrator. Note that 0 means "Not able/wanting to make a decision".
      */
-    function giveRuling(uint _disputeID, uint _ruling) public onlyOwner {
-        return _giveRuling(_disputeID, _ruling);
+    function giveRuling(uint256 _disputeID, uint256 _ruling) public onlyOwner {
+        DisputeStruct storage dispute = disputes[_disputeID];
+
+        require(_ruling <= dispute.choices, "Invalid ruling.");
+        require(dispute.status != DisputeStatus.Solved, "The dispute must not be solved already.");
+
+        dispute.ruling = _ruling;
+
+        if (dispute.rulingAppealTimeOut == 0) {
+            dispute.rulingAppealTimeOut = rulingTime + block.timestamp;
+            dispute.status = DisputeStatus.Appealable;
+
+            emit AppealPossible(_disputeID, disputes[_disputeID].arbitrated);
+        } else if(dispute.rulingAppealTimeOut <= block.timestamp) {
+            dispute.status = DisputeStatus.Solved;
+
+            payable(msg.sender).send(dispute.fee); // Avoid blocking.
+            if (dispute.isAppealed == true) payable(msg.sender).send(dispute.fee); // Appeal fee
+
+            dispute.arbitrated.rule(_disputeID, _ruling);
+        }
     }
 
     /** @dev Return the status of a dispute.
      *  @param _disputeID ID of the dispute to rule.
      *  @return status The status of the dispute.
      */
-    function disputeStatus(uint _disputeID) override public view returns(DisputeStatus status) {
+    function disputeStatus(uint256 _disputeID) override public view returns(DisputeStatus status) {
         return disputes[_disputeID].status;
     }
 
@@ -257,7 +277,8 @@ contract CentralizedArbitrator is Arbitrator {
      *  @param _disputeID ID of the dispute to rule.
      *  @return ruling The ruling which would or has been given.
      */
-    function currentRuling(uint _disputeID) override public view returns(uint ruling) {
+    function currentRuling(uint256 _disputeID) override public view returns(uint256 ruling) {
         return disputes[_disputeID].ruling;
     }
 }
+
