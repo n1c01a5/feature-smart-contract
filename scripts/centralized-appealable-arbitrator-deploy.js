@@ -14,12 +14,12 @@ async function main() {
   // await hre.run('compile');
 
   // We get the contract to deploy
-  const CentralizedArbitrator = await hre.ethers.getContractFactory("CentralizedArbitrator");
+  const CentralizedArbitrator = await hre.ethers.getContractFactory("CentralizedAppealableArbitrator");
   const centralizedArbitrator = await CentralizedArbitrator.deploy("20000000000000000", "42");
 
   await centralizedArbitrator.deployed();
 
-  console.log("CentralizedArbitrator deployed to:", centralizedArbitrator.address);
+  console.log("CentralizedAppealableArbitrator deployed to:", centralizedArbitrator.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
