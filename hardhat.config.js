@@ -28,7 +28,11 @@ module.exports = {
     goerli: {
       url: `https://goerli.infura.io/v3/${INFURA_PROJECT_ID}`,
       accounts: [PRIVATE_KEY_DEPLOYER]
-    }
+    },
+    poa: {
+      url: "https://sokol.poa.network/",
+      accounts: [PRIVATE_KEY_DEPLOYER]
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY
