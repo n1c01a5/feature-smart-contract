@@ -694,7 +694,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         payable(claim.receiver).transfer(transaction.amount + transaction.deposit + claim.receiverFee);
 
-        emit Payment(claim.transactionID, transaction.amount, transaction.sender);
+        emit Payment(claim.transactionID, transaction.amount, claim.receiver);
     }
 
     /**
