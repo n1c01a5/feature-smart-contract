@@ -686,7 +686,7 @@ contract FeatureERC20 is Initializable, NativeMetaTransaction, ChainConstants, C
         payable(claim.receiver).transfer(transaction.deposit + claim.receiverFee);
         IERC20(transaction.token).transfer(claim.receiver, transaction.amount);
 
-        emit Payment(claim.transactionID, transaction.amount, transaction.sender);
+        emit Payment(claim.transactionID, transaction.amount, claim.receiver);
     }
 
     /**
