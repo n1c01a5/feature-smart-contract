@@ -536,11 +536,12 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     // **************************** //
     
     /** @dev To be emitted when a party pays.
+     *  @param _claimID The index of the claim.
      *  @param _transactionID The index of the transaction.
      *  @param _amount The amount paid.
      *  @param _party The party that paid.
      */
-    event Payment(uint256 indexed _transactionID, uint256 _amount, address _party);
+    event Payment(uint256 indexed _claimID, uint256 indexed _transactionID, uint256 _amount, address _party);
 
     /** @dev To be emitted when a sender is refunded.
      *  @param _transactionID The index of the transaction.
@@ -694,7 +695,7 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
 
         payable(claim.receiver).transfer(transaction.amount + transaction.deposit + claim.receiverFee);
 
-        emit Payment(claim.transactionID, transaction.amount, transaction.sender);
+        emit Payment(_claimID, claim.transactionID, transaction.amount, transaction.sender);
     }
 
     /**
