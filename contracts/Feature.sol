@@ -538,9 +538,9 @@ contract Feature is Initializable, NativeMetaTransaction, ChainConstants, Contex
     /** @dev To be emitted when a party pays.
      *  @param _transactionID The index of the transaction.
      *  @param _amount The amount paid.
-     *  @param _party The party that paid.
+     *  @param _receiver the receiver of the transaction amount.
      */
-    event Payment(uint256 indexed _transactionID, uint256 _amount, address _party);
+    event Payment(uint256 indexed _transactionID, uint256 _amount, address _receiver);
 
     /** @dev To be emitted when a sender is refunded.
      *  @param _transactionID The index of the transaction.
