@@ -242,7 +242,7 @@ describe("Feature", function () {
 
     const newBalanceChallenger0Expected = new ethers.BigNumber.from("10000000000000000000000").sub(gasFeeChallengeClaimTx).add("100000000000000000");
 
-    // expect((await provider.getBalance(challenger0.address)).toString()).to.equal(newBalanceChallenger0Expected.toString());
+    expect((await provider.getBalance(challenger0.address)).toString()).to.equal(newBalanceChallenger0Expected.toString());
   });
 
   it("Should give the amount of the total deposit to the claimer after a aborted challenge", async function () {
