@@ -144,6 +144,7 @@ abstract contract Arbitrator {
 }
 
 /** @title Centralized Arbitrator
+ *  @dev Note: It's a naive implementation to manage court appeals where arbitration fees are not systematically refunded to the winning party.
  *  @dev This is a centralized arbitrator deciding alone on the result of disputes. No appeals are possible.
  */
 contract CentralizedAppealableArbitrator is Arbitrator {
